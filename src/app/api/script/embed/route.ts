@@ -31,9 +31,13 @@ export async function POST(request: NextRequest) {
 
     const embedding = embeddingResponse.data[0].embedding;
 
+    // Determine which table to update based on table parameter or segmentId lookup
+    const { table = 'script_segments' } = body;
+    const tableName = table === 'dispo' ? 'dispo_script_segments' : 'script_segments';
+
     // Update the segment with the embedding
     const { error: updateError } = await supabaseAdmin
-      .from('script_segments')
+      .from(tableName)
       .update({ embedding })
       .eq('id', segmentId);
 

@@ -8,15 +8,18 @@ import { supabaseAdmin, createSupabaseClient } from '@/lib/supabase';
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId');
+    // Get authenticated user
+    const supabase = createSupabaseClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-    if (!userId) {
+    if (authError || !user) {
       return NextResponse.json(
-        { error: 'userId is required' },
-        { status: 400 }
+        { error: 'Unauthorized' },
+        { status: 401 }
       );
     }
+
+    const userId = user.id;
 
     // Get user badges
     const { data: badges, error } = await supabaseAdmin
@@ -47,12 +50,25 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { userId, badgeType, badgeName, badgeDescription, metadata } = body;
+    // Get authenticated user
+    const supabase = createSupabaseClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-    if (!userId || !badgeType || !badgeName) {
+    if (authError || !user) {
       return NextResponse.json(
-        { error: 'userId, badgeType, and badgeName are required' },
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    const userId = user.id;
+
+    const body = await request.json();
+    const { badgeType, badgeName, badgeDescription, metadata } = body;
+
+    if (!badgeType || !badgeName) {
+      return NextResponse.json(
+        { error: 'badgeType and badgeName are required' },
         { status: 400 }
       );
     }

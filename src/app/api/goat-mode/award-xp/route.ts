@@ -4,19 +4,32 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+import { supabaseAdmin, createSupabaseClient } from '@/lib/supabase';
 
 const BASE_XP_PER_SECOND = 1; // Base XP per second of call
 const GOAT_MODE_MULTIPLIER = 2; // 2x XP during Goat Mode
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { userId, callDuration, goatModeDuration, goatScore } = body;
+    // Get authenticated user
+    const supabase = createSupabaseClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-    if (!userId || !callDuration) {
+    if (authError || !user) {
       return NextResponse.json(
-        { error: 'userId and callDuration are required' },
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    const userId = user.id;
+
+    const body = await request.json();
+    const { callDuration, goatModeDuration, goatScore } = body;
+
+    if (!callDuration) {
+      return NextResponse.json(
+        { error: 'callDuration is required' },
         { status: 400 }
       );
     }

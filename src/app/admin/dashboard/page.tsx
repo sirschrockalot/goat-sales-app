@@ -16,10 +16,15 @@ import {
   ArrowLeft,
   CheckCircle,
   Users,
-  BarChart3
+  BarChart3,
+  UserPlus,
+  Mail,
+  Send
 } from 'lucide-react';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { useAuth } from '@/contexts/AuthContext';
+import UserManagement from '@/components/admin/UserManagement';
+import TrainingReport from '@/components/admin/TrainingReport';
 
 interface Stats {
   totalCallsToday: number;
@@ -60,6 +65,10 @@ export default function AdminDashboard() {
   const [objectionTrends, setObjectionTrends] = useState<ObjectionTrend[]>([]);
   const [rebuttals, setRebuttals] = useState<Rebuttal[]>([]);
   const [loading, setLoading] = useState(true);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [trainingPath, setTrainingPath] = useState<'acquisitions' | 'dispositions' | ''>('');
+  const [inviting, setInviting] = useState(false);
+  const [inviteMessage, setInviteMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Redirect non-admins
   useEffect(() => {
@@ -131,6 +140,47 @@ export default function AdminDashboard() {
 
   const handleViewCalls = (userId: string) => {
     router.push(`/admin/calls?userId=${userId}`);
+  };
+
+  const handleInviteUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inviteEmail || !inviteEmail.includes('@')) {
+      setInviteMessage({ type: 'error', text: 'Please enter a valid email address' });
+      return;
+    }
+
+    if (!trainingPath) {
+      setInviteMessage({ type: 'error', text: 'Please select a training path' });
+      return;
+    }
+
+    setInviting(true);
+    setInviteMessage(null);
+
+    try {
+      const response = await fetch('/api/admin/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          email: inviteEmail,
+          training_path: trainingPath,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setInviteMessage({ type: 'success', text: `Invitation sent to ${inviteEmail}` });
+        setInviteEmail('');
+        setTrainingPath('');
+      } else {
+        setInviteMessage({ type: 'error', text: data.error || 'Failed to send invitation' });
+      }
+    } catch (error) {
+      setInviteMessage({ type: 'error', text: 'Failed to send invitation. Please try again.' });
+    } finally {
+      setInviting(false);
+    }
   };
 
   // Show loading or redirect if not admin
@@ -294,6 +344,110 @@ export default function AdminDashboard() {
               )}
             </div>
           </div>
+        </div>
+
+        {/* Invite Team Section */}
+        <div
+          className="rounded-2xl p-6 border border-[#3B82F6]/30 mb-8"
+          style={{
+            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+            boxShadow: '0 0 20px rgba(59, 130, 246, 0.2)',
+          }}
+        >
+          <div className="flex items-center gap-3 mb-6">
+            <UserPlus className="w-6 h-6" style={{ color: '#3B82F6' }} />
+            <h2 className="text-2xl font-bold">Invite Team Member</h2>
+          </div>
+          <form onSubmit={handleInviteUser} className="space-y-4">
+            <div className="flex gap-3">
+              <div className="flex-1 relative">
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="email"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  placeholder="Enter email address"
+                  required
+                  className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-[#3B82F6] focus:ring-2 focus:ring-[#3B82F6]/20 transition-all"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={inviting || !inviteEmail || !trainingPath}
+                className="px-6 py-3 bg-[#3B82F6] text-white rounded-xl font-semibold hover:bg-[#2563eb] transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{
+                  boxShadow: '0 0 20px rgba(59, 130, 246, 0.3)',
+                }}
+              >
+                <Send className="w-5 h-5" />
+                {inviting ? 'Sending...' : 'Invite'}
+              </button>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Training Path
+              </label>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setTrainingPath('acquisitions')}
+                  className={`flex-1 px-4 py-3 rounded-xl border-2 transition-all ${
+                    trainingPath === 'acquisitions'
+                      ? 'border-[#22C55E] bg-[#22C55E]/20'
+                      : 'border-white/10 bg-white/5 hover:border-[#22C55E]/50'
+                  }`}
+                  style={
+                    trainingPath === 'acquisitions'
+                      ? { boxShadow: '0 0 20px rgba(34, 197, 94, 0.3)' }
+                      : {}
+                  }
+                >
+                  <div className="text-sm font-semibold text-[#22C55E]">Acquisitions</div>
+                  <div className="text-xs text-gray-400 mt-1">Selling to homeowners</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTrainingPath('dispositions')}
+                  className={`flex-1 px-4 py-3 rounded-xl border-2 transition-all ${
+                    trainingPath === 'dispositions'
+                      ? 'border-[#3B82F6] bg-[#3B82F6]/20'
+                      : 'border-white/10 bg-white/5 hover:border-[#3B82F6]/50'
+                  }`}
+                  style={
+                    trainingPath === 'dispositions'
+                      ? { boxShadow: '0 0 20px rgba(59, 130, 246, 0.3)' }
+                      : {}
+                  }
+                >
+                  <div className="text-sm font-semibold text-[#3B82F6]">Dispositions</div>
+                  <div className="text-xs text-gray-400 mt-1">Selling to investors</div>
+                </button>
+              </div>
+            </div>
+          </form>
+          {inviteMessage && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`mt-4 p-3 rounded-xl text-sm ${
+                inviteMessage.type === 'success'
+                  ? 'bg-[#22C55E]/10 border border-[#22C55E]/50 text-[#22C55E]'
+                  : 'bg-red-500/10 border border-red-500/50 text-red-400'
+              }`}
+            >
+              {inviteMessage.text}
+            </motion.div>
+          )}
+        </div>
+
+        {/* Training Progress Report */}
+        <div className="mb-8">
+          <TrainingReport />
+        </div>
+
+        {/* User Management */}
+        <div className="mb-8">
+          <UserManagement />
         </div>
 
         {/* Hall of Fame */}

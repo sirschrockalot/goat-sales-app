@@ -5,8 +5,10 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { gradeCall } from '@/lib/grading';
+import { gradeDispoCall } from '@/lib/dispoGrading';
 import { analyzeDeviation } from '@/lib/analyzeDeviation';
 import { supabaseAdmin } from '@/lib/supabase';
+import { rateLimit, getClientIP } from '@/lib/rateLimit';
 
 interface VapiWebhookPayload {
   type: string;
@@ -33,6 +35,63 @@ interface VapiWebhookPayload {
 
 export async function POST(request: NextRequest) {
   try {
+    // SECURITY: Verify webhook secret at the very beginning
+    // Extract the secret from headers (Vapi sends it as x-vapi-secret)
+    const vapiSecret = request.headers.get('x-vapi-secret') || 
+                       request.headers.get('authorization')?.replace('Bearer ', '');
+    const expectedSecret = process.env.VAPI_SECRET_KEY || process.env.VAPI_WEBHOOK_SECRET;
+
+    // If a secret is configured, validate it
+    if (expectedSecret) {
+      if (!vapiSecret || vapiSecret !== expectedSecret) {
+        // Log failed attempt (without logging the actual key)
+        const clientIP = request.headers.get('x-forwarded-for')?.split(',')[0] || 
+                        request.headers.get('x-real-ip') || 
+                        'unknown';
+        
+        console.warn(`[SECURITY] Invalid Vapi webhook secret attempt from IP: ${clientIP}`, {
+          timestamp: new Date().toISOString(),
+          hasSecret: !!vapiSecret,
+          secretLength: vapiSecret?.length || 0,
+          userAgent: request.headers.get('user-agent')?.substring(0, 50) || 'unknown',
+        });
+
+        return NextResponse.json(
+          { error: 'Unauthorized' },
+          { status: 401 }
+        );
+      }
+
+      // Log successful validation (optional, can be removed in production)
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[SECURITY] Vapi webhook secret validated successfully');
+      }
+    } else {
+      // Warn if no secret is configured (security risk)
+      console.warn('[SECURITY] VAPI_SECRET_KEY not configured - webhook is unsecured!');
+    }
+
+    // Rate limiting
+    const clientIP = getClientIP(request);
+    const rateLimitResult = await rateLimit(`webhook:${clientIP}`, {
+      limit: 100, // 100 requests per hour
+      window: '1h',
+    });
+
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        { error: 'Rate limit exceeded', retryAfter: rateLimitResult.reset },
+        { 
+          status: 429,
+          headers: {
+            'X-RateLimit-Limit': rateLimitResult.limit.toString(),
+            'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
+            'X-RateLimit-Reset': rateLimitResult.reset.toString(),
+          },
+        }
+      );
+    }
+
     const body: VapiWebhookPayload = await request.json();
 
     // Handle Aircall webhook format (from Chrome Extension)
@@ -47,11 +106,45 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ received: true, message: 'No transcript provided' }, { status: 200 });
       }
 
-      // Grade the call
-      const gradingResult = await gradeCall(transcript);
+      // Determine persona mode (default to acquisition for Aircall calls)
+      const personaMode = body.personaMode || body.metadata?.personaMode || 'acquisition';
 
-      // Calculate logic gates
-      const logicGates = [
+      // Grade the call using appropriate grading function
+      const gradingResult = personaMode === 'disposition' 
+        ? await gradeDispoCall(transcript)
+        : await gradeCall(transcript);
+
+      // Analyze script deviation (pass mode for correct table selection)
+      const deviationAnalysis = await analyzeDeviation(transcript, personaMode);
+
+      // Calculate logic gates based on mode
+      const logicGates = personaMode === 'disposition' ? [
+        {
+          name: 'The Hook (The Numbers)',
+          passed: gradingResult.logicGates.hook === 'pass',
+        },
+        {
+          name: 'The Narrative (Comp Analysis)',
+          passed: gradingResult.logicGates.narrative === 'pass',
+        },
+        {
+          name: 'The Scarcity Anchor',
+          passed: gradingResult.logicGates.scarcity === 'pass',
+        },
+        {
+          name: 'The Terms',
+          passed: gradingResult.logicGates.terms === 'pass',
+        },
+        {
+          name: 'The Clinch (Assignment)',
+          passed: gradingResult.logicGates.clinch === 'pass',
+        },
+        {
+          name: 'Tonality',
+          passed: gradingResult.logicGates.tonality >= 7,
+          score: gradingResult.logicGates.tonality,
+        },
+      ] : [
         {
           name: 'Approval/Denial Intro',
           passed: gradingResult.logicGates.intro === 'pass',
@@ -131,33 +224,64 @@ export async function POST(request: NextRequest) {
     // Grade the call using OpenAI
     const gradingResult = await gradeCall(transcript);
 
-    // Analyze script deviation
-    const deviationAnalysis = await analyzeDeviation(transcript);
+      // Analyze script deviation (pass mode for correct table selection)
+      const deviationAnalysis = await analyzeDeviation(transcript, personaMode);
 
-    // Calculate logic gates array for database
-    const logicGates = [
-      {
-        name: 'Approval/Denial Intro',
-        passed: gradingResult.logicGates.intro === 'pass',
-      },
-      {
-        name: 'Fact-Finding',
-        passed: gradingResult.logicGates.why === 'found',
-      },
-      {
-        name: 'Property Condition',
-        passed: gradingResult.logicGates.propertyCondition === 'pass',
-      },
-      {
-        name: 'Tone',
-        passed: gradingResult.logicGates.tone >= 7,
-        score: gradingResult.logicGates.tone,
-      },
-      {
-        name: 'The Clinch',
-        passed: gradingResult.logicGates.clinch === 'pass',
-      },
-    ];
+      // Grade the call using appropriate grading function
+      const gradingResult = personaMode === 'disposition' 
+        ? await gradeDispoCall(transcript)
+        : await gradeCall(transcript);
+
+      // Calculate logic gates array for database based on mode
+      const logicGates = personaMode === 'disposition' ? [
+        {
+          name: 'The Hook (The Numbers)',
+          passed: gradingResult.logicGates.hook === 'pass',
+        },
+        {
+          name: 'The Narrative (Comp Analysis)',
+          passed: gradingResult.logicGates.narrative === 'pass',
+        },
+        {
+          name: 'The Scarcity Anchor',
+          passed: gradingResult.logicGates.scarcity === 'pass',
+        },
+        {
+          name: 'The Terms',
+          passed: gradingResult.logicGates.terms === 'pass',
+        },
+        {
+          name: 'The Clinch (Assignment)',
+          passed: gradingResult.logicGates.clinch === 'pass',
+        },
+        {
+          name: 'Tonality',
+          passed: gradingResult.logicGates.tonality >= 7,
+          score: gradingResult.logicGates.tonality,
+        },
+      ] : [
+        {
+          name: 'Approval/Denial Intro',
+          passed: gradingResult.logicGates.intro === 'pass',
+        },
+        {
+          name: 'Fact-Finding',
+          passed: gradingResult.logicGates.why === 'found',
+        },
+        {
+          name: 'Property Condition',
+          passed: gradingResult.logicGates.propertyCondition === 'pass',
+        },
+        {
+          name: 'Tone',
+          passed: gradingResult.logicGates.tone >= 7,
+          score: gradingResult.logicGates.tone,
+        },
+        {
+          name: 'The Clinch',
+          passed: gradingResult.logicGates.clinch === 'pass',
+        },
+      ];
 
         // Extract gauntlet level from metadata if present
         const gauntletLevel = call.metadata?.gauntletLevel || 

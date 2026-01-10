@@ -8,12 +8,34 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { judgeCall } from '@/lib/judge';
 import { analyzeDeviation } from '@/lib/analyzeDeviation';
+import { rateLimit, getClientIP } from '@/lib/rateLimit';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
+    // Rate limiting for grading endpoint
+    const clientIP = getClientIP(request);
+    const rateLimitResult = await rateLimit(`judge:${clientIP}`, {
+      limit: 50, // 50 requests per hour
+      window: '1h',
+    });
+
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        { error: 'Rate limit exceeded', retryAfter: rateLimitResult.reset },
+        { 
+          status: 429,
+          headers: {
+            'X-RateLimit-Limit': rateLimitResult.limit.toString(),
+            'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
+            'X-RateLimit-Reset': rateLimitResult.reset.toString(),
+          },
+        }
+      );
+    }
+
     const callId = params.id;
 
     const { data, error } = await supabaseAdmin
@@ -28,6 +50,35 @@ export async function GET(
         { error: 'Call not found' },
         { status: 404 }
       );
+    }
+
+    // Generate signed URL for recording if it exists
+    if (data.recording_url) {
+      try {
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+        
+        // If it's a Supabase storage URL, create a signed URL
+        if (data.recording_url.includes(supabaseUrl)) {
+          const urlMatch = data.recording_url.match(/\/storage\/v1\/object\/(public|sign)\/([^\/]+)\/(.+)/);
+          
+          if (urlMatch) {
+            const [, , bucket, path] = urlMatch;
+            
+            // Generate signed URL with 60 minute expiration
+            const { data: signedUrlData, error: signedUrlError } = await supabaseAdmin.storage
+              .from(bucket)
+              .createSignedUrl(path, 3600); // 60 minutes
+
+            if (!signedUrlError && signedUrlData) {
+              data.recording_url = signedUrlData.signedUrl;
+            }
+          }
+        }
+        // External URLs (e.g., Vapi) are returned as-is
+      } catch (signedUrlError) {
+        console.error('Error generating signed URL:', signedUrlError);
+        // Continue with original URL if signed URL generation fails
+      }
     }
 
     // If goat_score is missing, trigger grading

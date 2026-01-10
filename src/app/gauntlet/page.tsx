@@ -63,7 +63,7 @@ export default function GauntletPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          difficulty: level,
+          gauntletLevel: level, // Pass gauntlet level instead of difficulty
           personaMode: selectedPath, // Use selected path (acquisition or disposition)
           voiceHintsEnabled: false, // No hints in gauntlet mode
         }),

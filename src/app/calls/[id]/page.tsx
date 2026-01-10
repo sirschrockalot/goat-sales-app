@@ -16,6 +16,7 @@ import ErrorBoundary from '@/components/ErrorBoundary';
 import LevelUpOverlay from '@/components/effects/LevelUpOverlay';
 import { getSoundboard } from '@/lib/soundboard';
 import { getGauntletLevel } from '@/lib/gauntletLevels';
+import { useAuth } from '@/contexts/AuthContext';
 import type { DeviationAnalysis } from '@/lib/analyzeDeviation';
 
 interface CallResult {
@@ -51,6 +52,7 @@ export default function CallDebriefPage() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { user } = useAuth();
   const callId = params.id as string;
   const gauntletLevel = searchParams.get('gauntletLevel');
 
@@ -146,7 +148,6 @@ export default function CallDebriefPage() {
         body: JSON.stringify({
           callId: callResult.id,
           rebuttalText: callResult.rebuttal_of_the_day,
-          userId: callResult.user_id,
         }),
       });
 
@@ -267,14 +268,13 @@ export default function CallDebriefPage() {
 
   // Evaluate gauntlet call
   const evaluateGauntletCall = async (goatScore: number) => {
-    if (!gauntletLevel || !callId || !callResult?.user_id) return;
+    if (!gauntletLevel || !callId || !user?.id) return;
 
     try {
       const response = await fetch('/api/gauntlet/evaluate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: callResult.user_id,
           callId: callId,
         }),
       });

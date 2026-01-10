@@ -4,17 +4,30 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+import { supabaseAdmin, createSupabaseClient } from '@/lib/supabase';
 import { getGauntletLevel } from '@/lib/gauntletLevels';
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { userId, callId } = body;
+    // Get authenticated user
+    const supabase = createSupabaseClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-    if (!userId || !callId) {
+    if (authError || !user) {
       return NextResponse.json(
-        { error: 'userId and callId are required' },
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    const userId = user.id;
+
+    const body = await request.json();
+    const { callId } = body;
+
+    if (!callId) {
+      return NextResponse.json(
+        { error: 'callId is required' },
         { status: 400 }
       );
     }

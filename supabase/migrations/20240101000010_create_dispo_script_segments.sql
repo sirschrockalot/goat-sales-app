@@ -40,13 +40,13 @@ CREATE POLICY "Admins can modify dispo script segments"
     )
   );
 
--- Pre-seed the 5 Dispo script gates
+-- Pre-seed the 5 Dispo script gates (from DISPO_SCRIPT_MAPPING.md)
 INSERT INTO dispo_script_segments (gate_number, gate_name, script_text, objective, success_criteria) VALUES
-(1, 'The Intro (Value Proposition)', 'Hi (Name), this is (My Name) from (Company). I''m calling because I saw your property on (Platform) and I''m interested in making you a cash offer. I specialize in quick closes—can we talk for 2 minutes?', 'Establish credibility and get permission to proceed', '{"keywords": ["cash offer", "quick close", "2 minutes"], "tone": "confident, direct"}'),
-(2, 'Fact Find (ARV & Condition)', 'Before I make an offer, I need to understand the property. What''s your estimated ARV (After Repair Value)? And walk me through the condition—what needs work?', 'Gather property details and assess ARV accuracy', '{"keywords": ["ARV", "condition", "repairs"], "questions": ["ARV estimate", "property condition"]}'),
-(3, 'The Pitch (Neighborhood Context)', 'I''ve done deals in this area before. What''s the neighborhood like? Any concerns about comps or market trends I should know about?', 'Build rapport and understand market context', '{"keywords": ["neighborhood", "comps", "market"], "tone": "consultative"}'),
-(4, 'The Offer (Timeline & Terms)', 'Based on what you''ve told me, I can offer $X as-is, cash, close in 7-14 days. No inspections, no contingencies. Does that timeline work for you?', 'Present offer with clear timeline and terms', '{"keywords": ["as-is", "cash", "7-14 days", "no contingencies"], "tone": "decisive"}'),
-(5, 'The Close (Agreement & Next Steps)', 'Great! I''ll send over a simple purchase agreement. Once you sign, we''ll schedule the title work and get this closed. Sound good?', 'Secure agreement and set expectations', '{"keywords": ["purchase agreement", "title work", "closed"], "tone": "assumptive close"}')
+(1, 'The Hook (The Numbers)', 'Hey (Buyer), I''ve got a heavy-hitter in (Neighborhood). Buy-in is ($$$), ARV is ($$$). It''s a bread-and-butter flip with a $50k spread. You interested in the numbers?', 'Capture interest with the profit potential and ROI', '{"keywords": ["ARV", "Buy-in", "Spread", "ROI", "Bread-and-butter"], "intent": "Leading with financial benefit", "tonality": "Professional, urgent, authoritative"}'),
+(2, 'The Narrative (The Comp Analysis)', 'The comps at (Address) just sold for ($$$). This is the worst house on the best street. Needs about $25k in cosmetics and you''re at full value.', 'Build confidence in the valuation using market data', '{"keywords": ["Comps", "Sold", "Cosmetics", "ARV justification"], "logic": "Comparing subject property to recent neighborhood sales"}'),
+(3, 'The Scarcity Anchor (The Competition)', 'I''m sending this to my top 5 buyers right now. I''ve already got walkthroughs being requested for tomorrow. If you want to lock this up, you have to move now.', 'Force a decision by establishing that the deal is moving fast', '{"keywords": ["Top 5 buyers", "Walkthroughs", "Lock it up", "Moving fast"], "tactics": "Creating FOMO environment"}'),
+(4, 'The Terms (Transaction Clarity)', 'Standard terms: $5k non-refundable EMD, 7-day close. We use (Title Company). Does your capital work with that timeline?', 'Filter for real buyers by setting non-negotiable closing terms', '{"keywords": ["Non-refundable EMD", "7-day close", "Title company"], "verification": "Confirming buyer has funds ready and agrees to speed"}'),
+(5, 'The Clinch (The Assignment)', 'I''m sending the assignment over to your email right now. Let me know the second you see it. Once you sign, the deal is yours and I''ll pull it from the list.', 'Get the assignment of contract signed immediately', '{"keywords": ["Sending assignment", "Sign now", "Deal is yours"], "action": "Directing buyer to stay on phone until signature confirmed"}')
 ON CONFLICT DO NOTHING;
 
 -- Add comment

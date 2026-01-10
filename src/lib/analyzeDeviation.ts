@@ -34,7 +34,7 @@ export interface DeviationAnalysis {
   coachingInsights: string[];
 }
 
-const GATE_NAMES = [
+const ACQUISITION_GATE_NAMES = [
   'The Intro (Approval/Denial)',
   'Fact Find (The Why)',
   'The Pitch (Inside/Outside)',
@@ -42,13 +42,26 @@ const GATE_NAMES = [
   'The Close (Agreement)',
 ];
 
+const DISPO_GATE_NAMES = [
+  'The Hook (The Numbers)',
+  'The Narrative (The Comp Analysis)',
+  'The Scarcity Anchor (The Competition)',
+  'The Terms (Transaction Clarity)',
+  'The Clinch (The Assignment)',
+];
+
 const CRITICAL_SKIP_THRESHOLD = 0.40;
 const LOW_ADHERENCE_THRESHOLD = 0.60;
 
 /**
  * Analyze script deviation for a call transcript
+ * @param transcript - The call transcript to analyze
+ * @param mode - 'acquisition' or 'disposition' (default: 'acquisition')
  */
-export async function analyzeDeviation(transcript: string): Promise<DeviationAnalysis> {
+export async function analyzeDeviation(
+  transcript: string,
+  mode: 'acquisition' | 'disposition' = 'acquisition'
+): Promise<DeviationAnalysis> {
   if (!transcript || transcript.trim().length === 0) {
     return getEmptyAnalysis();
   }
@@ -62,9 +75,13 @@ export async function analyzeDeviation(transcript: string): Promise<DeviationAna
 
     const transcriptEmbedding = embeddingResponse.data[0].embedding;
 
-    // Get all script segments
+    // Select the correct table based on mode
+    const tableName = mode === 'disposition' ? 'dispo_script_segments' : 'script_segments';
+    const gateNames = mode === 'disposition' ? DISPO_GATE_NAMES : ACQUISITION_GATE_NAMES;
+
+    // Get all script segments from the appropriate table
     const { data: scriptSegments, error } = await supabaseAdmin
-      .from('script_segments')
+      .from(tableName)
       .select('id, gate_number, gate_name, script_text, embedding')
       .order('gate_number', { ascending: true });
 
@@ -83,7 +100,7 @@ export async function analyzeDeviation(transcript: string): Promise<DeviationAna
         // Skip if no embedding
         gateDeviations.push({
           gate: segment.gate_number,
-          gateName: segment.gate_name || GATE_NAMES[segment.gate_number - 1],
+          gateName: segment.gate_name || gateNames[segment.gate_number - 1],
           faithfulnessScore: 0,
           similarity: 0,
           isCriticalSkip: true,
@@ -102,7 +119,7 @@ export async function analyzeDeviation(transcript: string): Promise<DeviationAna
 
       const deviation: GateDeviation = {
         gate: segment.gate_number,
-        gateName: segment.gate_name || GATE_NAMES[segment.gate_number - 1],
+        gateName: segment.gate_name || gateNames[segment.gate_number - 1],
         faithfulnessScore,
         similarity,
         isCriticalSkip: similarity < CRITICAL_SKIP_THRESHOLD,
@@ -117,7 +134,7 @@ export async function analyzeDeviation(transcript: string): Promise<DeviationAna
         maxSimilarity = similarity;
         goldenMoment = {
           gate: segment.gate_number,
-          gateName: segment.gate_name || GATE_NAMES[segment.gate_number - 1],
+          gateName: segment.gate_name || gateNames[segment.gate_number - 1],
           similarity,
           transcript: actualTranscript || transcript.substring(0, 200),
         };

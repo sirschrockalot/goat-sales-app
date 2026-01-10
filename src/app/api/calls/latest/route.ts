@@ -4,20 +4,22 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+import { supabaseAdmin, createSupabaseClient } from '@/lib/supabase';
 
 export async function GET(request: NextRequest) {
   try {
-    // In production, get user ID from auth token
-    // For MVP, we'll use a header or query param
-    const userId = request.headers.get('x-user-id') || request.nextUrl.searchParams.get('user_id');
-    
-    if (!userId) {
+    // Get authenticated user from Supabase auth
+    const supabase = createSupabaseClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
       return NextResponse.json(
-        { error: 'User ID required' },
-        { status: 400 }
+        { error: 'Unauthorized' },
+        { status: 401 }
       );
     }
+
+    const userId = user.id;
 
     const { data, error } = await supabaseAdmin
       .from('calls')

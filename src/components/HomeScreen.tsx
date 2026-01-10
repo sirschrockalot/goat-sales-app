@@ -7,7 +7,7 @@
  */
 
 import { useRouter } from 'next/navigation';
-import { Home, Handshake, Flame, ShieldCheck, BarChart3, Trophy } from 'lucide-react';
+import { Home, Handshake, Flame, ShieldCheck, BarChart3, Trophy, LogOut } from 'lucide-react';
 import TopRebuttals from './TopRebuttals';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -23,10 +23,15 @@ export default function HomeScreen({
   weeklyGoal = 85,
 }: HomeScreenProps) {
   const router = useRouter();
-  const { user, loading, isAdmin } = useAuth();
+  const { user, loading, isAdmin, signOut } = useAuth();
   
   const userName = propUserName || user?.name || 'Alex M.';
   const dailyStreak = propDailyStreak || user?.dailyStreak || 12;
+
+  const handleSignOut = async () => {
+    await signOut();
+    router.push('/login');
+  };
 
   return (
     <div className="min-h-screen bg-[#0B0E14] text-white p-6 flex flex-col max-w-md mx-auto">
@@ -62,15 +67,26 @@ export default function HomeScreen({
             )}
           </div>
         </div>
-        <div 
-          className="flex items-center gap-2 px-4 py-2 rounded-2xl border border-white/10"
-          style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)' }}
-        >
-          <Flame className="w-5 h-5 text-orange-400" />
-          <div>
-            <div className="text-xs text-gray-400">Daily Streak</div>
-            <div className="text-sm font-semibold">{dailyStreak} Days</div>
+        <div className="flex items-center gap-3">
+          <div 
+            className="flex items-center gap-2 px-4 py-2 rounded-2xl border border-white/10"
+            style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)' }}
+          >
+            <Flame className="w-5 h-5 text-orange-400" />
+            <div>
+              <div className="text-xs text-gray-400">Daily Streak</div>
+              <div className="text-sm font-semibold">{dailyStreak} Days</div>
+            </div>
           </div>
+          {user && (
+            <button
+              onClick={handleSignOut}
+              className="p-2 rounded-xl border border-white/10 hover:bg-white/10 transition-colors"
+              title="Sign Out"
+            >
+              <LogOut className="w-5 h-5 text-gray-400" />
+            </button>
+          )}
         </div>
       </div>
 
