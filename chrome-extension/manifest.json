@@ -1,0 +1,49 @@
+{
+  "manifest_version": 3,
+  "name": "Sales Goat Shadow Mode",
+  "version": "1.0.0",
+  "description": "AI-powered sales coaching overlay for Aircall with real-time rebuttals and certainty tracking",
+  "permissions": [
+    "tabCapture",
+    "activeTab",
+    "storage",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://*.aircall.io/*",
+    "https://*.supabase.co/*",
+    "wss://*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*.aircall.io/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["shadow-overlay.js", "shadow-overlay.css"],
+      "matches": ["https://*.aircall.io/*"]
+    }
+  ]
+}

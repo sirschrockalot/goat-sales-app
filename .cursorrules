@@ -1,0 +1,22 @@
+# Cursor AI Rules for Goat Sales App
+
+## Project Context
+This is a Next.js application with AI voice capabilities using Vapi, Deepgram, and Pinecone.
+
+## Code Style
+- Use TypeScript for all new files
+- Follow Next.js App Router conventions
+- Use functional components with hooks
+- Prefer async/await over promises
+
+## AI Behavior
+- Reference docs/ for framework and architecture decisions
+- Follow the GOAT framework (docs/GOAT_FRAMEWORK.md) for development process
+- Check TECH_STACK.md for integration patterns
+- Consider ROADMAP.md for future features
+
+## File Organization
+- Components in src/components/
+- App routes in src/app/
+- Utilities and integrations in src/lib/
+- Documentation in docs/

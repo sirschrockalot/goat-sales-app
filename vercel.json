@@ -1,0 +1,22 @@
+{
+  "functions": {
+    "src/app/api/vapi-webhook/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/rebuttals/embed/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/calls/[id]/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/cron/daily-recap/route.ts": {
+      "maxDuration": 60
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/daily-recap",
+      "schedule": "0 8 * * *"
+    }
+  ]
+}
