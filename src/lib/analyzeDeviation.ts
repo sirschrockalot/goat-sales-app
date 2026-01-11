@@ -264,10 +264,10 @@ function generateCoachingInsights(gates: GateDeviation[]): string[] {
     insights.push('You didn\'t properly uncover "The Why" in Gate 2. Without understanding their motivation, you can\'t use it against objections later.');
   }
 
-  // Check Gate 5 (The Close) specifically
-  const gate5 = gates.find((g) => g.gate === 5);
-  if (gate5 && gate5.similarity < 0.50) {
-    insights.push('The Close was weak. You need to assume the close and walk them through the agreement process step-by-step.');
+  // Check Gate 8 (Final Commitment) specifically
+  const gate8 = gates.find((g) => g.gate === 8);
+  if (gate8 && gate8.similarity < 0.50) {
+    insights.push('The Final Commitment was weak. You need to ask "Are you 100% ready to move forward?" and confirm their email before sending the agreement.');
   }
 
   // If no specific insights, provide general feedback

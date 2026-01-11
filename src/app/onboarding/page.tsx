@@ -37,7 +37,10 @@ export default function OnboardingPage() {
     const fetchOnboardingData = async () => {
       if (!user) {
         if (!authLoading) {
-          router.push('/login');
+          // Only redirect if not already on login page
+          if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+            router.push('/login');
+          }
         }
         return;
       }
@@ -52,8 +55,13 @@ export default function OnboardingPage() {
 
         if (error) {
           console.error('Error fetching onboarding data:', error);
-          // If profile doesn't exist yet, redirect to home
-          router.push('/');
+          // If profile doesn't exist yet, allow user to stay on onboarding page
+          // Don't redirect - let them complete onboarding
+          setOnboardingData({
+            assignedPath: null,
+            hasCompletedOnboarding: false,
+          });
+          setLoading(false);
           return;
         }
 
@@ -63,19 +71,26 @@ export default function OnboardingPage() {
         });
 
         // If onboarding already completed, redirect to home
+        // But only if we're not already on the home page
         if (profile?.onboarding_completed) {
-          router.push('/');
+          if (typeof window !== 'undefined' && window.location.pathname !== '/') {
+            router.push('/');
+          }
         }
       } catch (error) {
         console.error('Error in onboarding:', error);
-        router.push('/');
+        // Don't redirect on error - allow user to stay on onboarding page
+        setOnboardingData({
+          assignedPath: null,
+          hasCompletedOnboarding: false,
+        });
       } finally {
         setLoading(false);
       }
     };
 
     fetchOnboardingData();
-  }, [user, authLoading, router]);
+  }, [user, authLoading]);
 
   const handleCompleteOnboarding = async () => {
     if (!user) return;

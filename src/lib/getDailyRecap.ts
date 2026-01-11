@@ -183,7 +183,7 @@ export async function getDailyRecap(): Promise<DailyRecapData> {
     : null;
 
   // Find "The Script Hole" (weakest gate)
-  const gateAdherences: { gate: number; total: number; count: number }[] = Array(5)
+  const gateAdherences: { gate: number; total: number; count: number }[] = Array(8)
     .fill(0)
     .map((_, i) => ({ gate: i + 1, total: 0, count: 0 }));
 
@@ -192,7 +192,7 @@ export async function getDailyRecap(): Promise<DailyRecapData> {
       const adherence = call.script_adherence as any;
       if (adherence.gates && Array.isArray(adherence.gates)) {
         adherence.gates.forEach((gate: any) => {
-          if (gate.gate >= 1 && gate.gate <= 5) {
+          if (gate.gate >= 1 && gate.gate <= 8) {
             gateAdherences[gate.gate - 1].total += gate.faithfulnessScore || 0;
             gateAdherences[gate.gate - 1].count += 1;
           }
@@ -298,7 +298,13 @@ function generateActionableAdvice(
   } else if (gate === 4) {
     return `The Offer (Gate 4) needs work—only ${adherence}% adherence. Reps are likely negotiating with dollars instead of "Pain & Circumstances." Re-train the Virtual Withdraw anchor and how to pivot back to motivation.`;
   } else if (gate === 5) {
-    return `The Close is weak at ${adherence}% adherence. Reps aren't assuming the close or walking through the agreement properly. Re-train the signature process and "Transaction Coordinator" setup tomorrow.`;
+    return `The Hold (Gate 5) needs work—only ${adherence}% adherence. Reps aren't setting up the hold properly. Re-train: "I'm going to plug everything you told me into our system" and give the option to hang on or call back.`;
+  } else if (gate === 6) {
+    return `The Offer (Gate 6) needs work—only ${adherence}% adherence. Reps aren't explaining "as-is" buying or presenting the number clearly. Re-train the offer presentation and the pause after presenting.`;
+  } else if (gate === 7) {
+    return `Setting Expectations (Gate 7) is weak at ${adherence}% adherence. Reps aren't walking through all 5 next steps properly. Re-train: Agreement, Welcome Call, Photos/Walkthrough, Title Work, and Closing.`;
+  } else if (gate === 8) {
+    return `Final Commitment (Gate 8) is weak at ${adherence}% adherence. Reps aren't asking "Are you 100% ready to move forward?" or confirming email. Re-train the commitment question and staying on the line.`;
   }
 
   return `Gate ${gate} (${scriptHole.gateName}) is the weakest link at ${adherence}% adherence. Focus training on this gate tomorrow.`;

@@ -57,25 +57,25 @@ export default function VoiceCoach({ difficulty = 5, className = '' }: VoiceCoac
       <motion.div
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        className="rounded-2xl p-4 border border-white/10"
+        className="rounded-xl p-3 border border-white/10"
         style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)' }}
       >
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
-            <MessageSquare className="w-5 h-5 text-[#22C55E]" />
-            <h3 className="text-sm font-semibold text-white">AI Voice Coach</h3>
+            <MessageSquare className="w-4 h-4 text-[#22C55E]" />
+            <h3 className="text-xs font-semibold text-white">AI Voice Coach</h3>
           </div>
-          <div className="text-xs text-gray-400">
+          <div className="text-[10px] text-gray-400">
             Difficulty: {difficulty}/10
           </div>
         </div>
 
-        <div className="space-y-3">
+        <div className="space-y-2">
           {/* Mode Toggle */}
           <button
             onClick={handleToggle}
             disabled={isToggling}
-            className={`w-full flex items-center justify-between p-3 rounded-lg border transition-all ${
+            className={`w-full flex items-center justify-between p-2 rounded-lg border transition-all ${
               coachMode === 'dual-mode'
                 ? 'bg-[#22C55E]/20 border-[#22C55E]/50'
                 : 'bg-white/5 border-white/10'
@@ -84,17 +84,17 @@ export default function VoiceCoach({ difficulty = 5, className = '' }: VoiceCoac
               boxShadow: coachMode === 'dual-mode' ? '0 0 20px rgba(34, 197, 94, 0.3)' : 'none',
             }}
           >
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               {coachMode === 'dual-mode' ? (
-                <Mic className="w-5 h-5 text-[#22C55E]" />
+                <Mic className="w-4 h-4 text-[#22C55E]" />
               ) : (
-                <MicOff className="w-5 h-5 text-gray-400" />
+                <MicOff className="w-4 h-4 text-gray-400" />
               )}
               <div className="text-left">
-                <div className="text-sm font-semibold text-white">
+                <div className="text-xs font-semibold text-white">
                   {coachMode === 'dual-mode' ? 'Dual Mode ON' : 'Seller Only'}
                 </div>
-                <div className="text-xs text-gray-400">
+                <div className="text-[10px] text-gray-400">
                   {coachMode === 'dual-mode'
                     ? 'AI gives voice hints when gates are missed'
                     : 'AI acts only as seller'}
@@ -105,13 +105,13 @@ export default function VoiceCoach({ difficulty = 5, className = '' }: VoiceCoac
               animate={{
                 scale: isToggling ? 0.9 : 1,
               }}
-              className={`w-12 h-6 rounded-full p-1 transition-colors ${
+              className={`w-10 h-5 rounded-full p-0.5 transition-colors ${
                 coachMode === 'dual-mode' ? 'bg-[#22C55E]' : 'bg-gray-600'
               }`}
             >
               <motion.div
                 animate={{
-                  x: coachMode === 'dual-mode' ? 24 : 0,
+                  x: coachMode === 'dual-mode' ? 20 : 0,
                 }}
                 className="w-4 h-4 bg-white rounded-full"
               />
@@ -135,7 +135,7 @@ export default function VoiceCoach({ difficulty = 5, className = '' }: VoiceCoac
           )}
 
           {/* Info Text */}
-          <div className="text-xs text-gray-500 leading-relaxed">
+          <div className="text-[10px] text-gray-500 leading-relaxed">
             {coachMode === 'dual-mode' ? (
               <>
                 The AI will continue playing the seller role, but will break character to give you

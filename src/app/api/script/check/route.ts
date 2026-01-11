@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     const { data, error } = await supabaseAdmin.rpc(rpcFunction, {
       query_embedding: queryEmbedding,
       match_threshold: 0.3, // Lower threshold to get all gates
-      match_count: 5, // Get all 5 gates
+      match_count: 8, // Get all 8 gates
     });
 
     if (error) {
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Format results - ensure we have all 5 gates
+    // Format results - ensure we have all 8 gates
     const gateNames = mode === 'disposition'
       ? [
           'The Intro (Value Proposition)',
@@ -71,11 +71,14 @@ export async function POST(request: NextRequest) {
           'The Close (Agreement & Next Steps)',
         ]
       : [
-          'The Intro (Approval/Denial)',
-          'Fact Find (The Why)',
-          'The Pitch (Inside/Outside)',
-          'The Offer (Virtual Withdraw)',
-          'The Close (Agreement)',
+          'Intro (Contact/Credibility)',
+          'Fact Find - Motivation',
+          'Fact Find - Condition',
+          'Transition to Numbers',
+          'Running Comps / Hold',
+          'The Offer',
+          'The Close - Expectations',
+          'Final Commitment',
         ];
 
     const results: GateSimilarity[] = gateNames.map((name, index) => {
@@ -103,7 +106,7 @@ export async function POST(request: NextRequest) {
     // Determine recommended next gate
     const recommendedGate = currentGate 
       ? (results.find(r => r.gate === currentGate)?.similarity || 0) > 0.75
-          ? Math.min(5, currentGate + 1)
+          ? Math.min(mode === 'disposition' ? 5 : 8, currentGate + 1)
           : currentGate
       : results[0]?.gate || 1;
 

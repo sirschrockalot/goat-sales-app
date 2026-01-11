@@ -9,12 +9,22 @@ CREATE TABLE IF NOT EXISTS calls (
   recording_url TEXT,
   persona_mode TEXT CHECK (persona_mode IN ('acquisition', 'disposition')),
   persona_id TEXT,
-  call_status TEXT CHECK (call_status IN ('connecting', 'connected', 'ended', 'error')),
   logic_gates JSONB DEFAULT '[]'::jsonb,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   ended_at TIMESTAMPTZ
 );
+
+-- Add call_status column if it doesn't exist (for existing tables)
+DO $$ 
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'calls' AND column_name = 'call_status'
+  ) THEN
+    ALTER TABLE calls ADD COLUMN call_status TEXT CHECK (call_status IN ('connecting', 'connected', 'ended', 'error'));
+  END IF;
+END $$;
 
 -- Create index on user_id for faster queries
 CREATE INDEX IF NOT EXISTS idx_calls_user_id ON calls(user_id);

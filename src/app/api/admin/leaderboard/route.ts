@@ -8,94 +8,75 @@ import { supabaseAdmin } from '@/lib/supabase';
 
 export async function GET(request: NextRequest) {
   try {
-    // Get all users with their call stats
-    const { data: calls } = await supabaseAdmin
+    // OPTIMIZED: Use the leaderboard_view for pre-calculated data
+    const { data: leaderboardData, error: viewError } = await supabaseAdmin
+      .from('leaderboard_view')
+      .select('user_id, name, email, total_calls, avg_goat_score, last_call_date')
+      .order('avg_goat_score', { ascending: false });
+
+    if (viewError) {
+      // Fallback to manual calculation if view doesn't exist
+      console.warn('leaderboard_view not available, using fallback:', viewError);
+      return await getLeaderboardFallback();
+    }
+
+    // OPTIMIZED: Fetch all profiles in one query instead of N queries
+    const userIds = leaderboardData?.map(l => l.user_id) || [];
+    const { data: profiles } = await supabaseAdmin
+      .from('profiles')
+      .select('id, name, email')
+      .in('id', userIds);
+
+    const profilesMap = new Map(profiles?.map(p => [p.id, p]) || []);
+
+    // OPTIMIZED: Fetch all recent calls in one query, grouped by user
+    const { data: allRecentCalls } = await supabaseAdmin
       .from('calls')
-      .select('user_id, goat_score, created_at')
-      .not('goat_score', 'is', null)
-      .order('created_at', { ascending: false });
+      .select('user_id, created_at')
+      .in('user_id', userIds)
+      .order('created_at', { ascending: false })
+      .limit(1000); // Get recent calls for all users
 
-    // Group by user_id and calculate stats
-    const userStats: Record<string, {
-      userId: string;
-      totalCalls: number;
-      totalScore: number;
-      averageScore: number;
-      lastCallDate: string;
-    }> = {};
-
-    calls?.forEach((call) => {
+    // Group calls by user_id
+    const callsByUser = new Map<string, typeof allRecentCalls>();
+    allRecentCalls?.forEach(call => {
       if (!call.user_id) return;
-
-      if (!userStats[call.user_id]) {
-        userStats[call.user_id] = {
-          userId: call.user_id,
-          totalCalls: 0,
-          totalScore: 0,
-          averageScore: 0,
-          lastCallDate: call.created_at,
-        };
+      if (!callsByUser.has(call.user_id)) {
+        callsByUser.set(call.user_id, []);
       }
-
-      userStats[call.user_id].totalCalls += 1;
-      userStats[call.user_id].totalScore += call.goat_score || 0;
-      userStats[call.user_id].lastCallDate = call.created_at > userStats[call.user_id].lastCallDate
-        ? call.created_at
-        : userStats[call.user_id].lastCallDate;
+      callsByUser.get(call.user_id)!.push(call);
     });
 
-    // Calculate averages and daily streaks
-    const leaderboard = await Promise.all(
-      Object.values(userStats).map(async (stats) => {
-        stats.averageScore = Math.round(stats.totalScore / stats.totalCalls);
+    // Calculate daily streaks for all users
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-        // Calculate daily streak
-        const { data: recentCalls } = await supabaseAdmin
-          .from('calls')
-          .select('created_at')
-          .eq('user_id', stats.userId)
-          .order('created_at', { ascending: false })
-          .limit(30);
-
-        let streak = 0;
-        if (recentCalls && recentCalls.length > 0) {
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          
-          for (let i = 0; i < recentCalls.length; i++) {
-            const callDate = new Date(recentCalls[i].created_at);
-            callDate.setHours(0, 0, 0, 0);
-            
-            const daysDiff = Math.floor((today.getTime() - callDate.getTime()) / (1000 * 60 * 60 * 24));
-            
-            if (daysDiff === i) {
-              streak++;
-            } else {
-              break;
-            }
-          }
+    const leaderboard = (leaderboardData || []).map((stats) => {
+      const profile = profilesMap.get(stats.user_id);
+      const userCalls = callsByUser.get(stats.user_id) || [];
+      
+      // Calculate daily streak
+      let streak = 0;
+      for (let i = 0; i < userCalls.length; i++) {
+        const callDate = new Date(userCalls[i].created_at);
+        callDate.setHours(0, 0, 0, 0);
+        const daysDiff = Math.floor((today.getTime() - callDate.getTime()) / (1000 * 60 * 60 * 24));
+        if (daysDiff === i) {
+          streak++;
+        } else {
+          break;
         }
+      }
 
-        // Get user profile for name
-        const { data: profile } = await supabaseAdmin
-          .from('profiles')
-          .select('name, email')
-          .eq('id', stats.userId)
-          .single();
-
-        return {
-          userId: stats.userId,
-          name: profile?.name || profile?.email || 'Unknown User',
-          email: profile?.email || '',
-          dailyStreak: streak,
-          totalCalls: stats.totalCalls,
-          averageScore: stats.averageScore,
-        };
-      })
-    );
-
-    // Sort by average score (descending)
-    leaderboard.sort((a, b) => b.averageScore - a.averageScore);
+      return {
+        userId: stats.user_id,
+        name: profile?.name || profile?.email || 'Unknown User',
+        email: profile?.email || '',
+        dailyStreak: streak,
+        totalCalls: stats.total_calls || 0,
+        averageScore: stats.avg_goat_score || 0,
+      };
+    });
 
     return NextResponse.json({ leaderboard });
   } catch (error) {
@@ -105,4 +86,65 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+/**
+ * Fallback leaderboard calculation if view doesn't exist
+ */
+async function getLeaderboardFallback() {
+  const { data: calls } = await supabaseAdmin
+    .from('calls')
+    .select('user_id, goat_score, created_at')
+    .not('goat_score', 'is', null)
+    .order('created_at', { ascending: false });
+
+  const userStats: Record<string, {
+    userId: string;
+    totalCalls: number;
+    totalScore: number;
+    averageScore: number;
+    lastCallDate: string;
+  }> = {};
+
+  calls?.forEach((call) => {
+    if (!call.user_id) return;
+    if (!userStats[call.user_id]) {
+      userStats[call.user_id] = {
+        userId: call.user_id,
+        totalCalls: 0,
+        totalScore: 0,
+        averageScore: 0,
+        lastCallDate: call.created_at,
+      };
+    }
+    userStats[call.user_id].totalCalls += 1;
+    userStats[call.user_id].totalScore += call.goat_score || 0;
+    userStats[call.user_id].lastCallDate = call.created_at > userStats[call.user_id].lastCallDate
+      ? call.created_at
+      : userStats[call.user_id].lastCallDate;
+  });
+
+  const userIds = Object.keys(userStats);
+  const { data: profiles } = await supabaseAdmin
+    .from('profiles')
+    .select('id, name, email')
+    .in('id', userIds);
+
+  const profilesMap = new Map(profiles?.map(p => [p.id, p]) || []);
+
+  const leaderboard = Object.values(userStats).map((stats) => {
+    stats.averageScore = Math.round(stats.totalScore / stats.totalCalls);
+    const profile = profilesMap.get(stats.userId);
+    return {
+      userId: stats.userId,
+      name: profile?.name || profile?.email || 'Unknown User',
+      email: profile?.email || '',
+      dailyStreak: 0, // Simplified for fallback
+      totalCalls: stats.totalCalls,
+      averageScore: stats.averageScore,
+    };
+  });
+
+  leaderboard.sort((a, b) => b.averageScore - a.averageScore);
+  return NextResponse.json({ leaderboard });
 }

@@ -147,30 +147,48 @@ function calculateGateMastery(
  */
 export async function getTrainingAnalytics(): Promise<TrainingAnalytics> {
   try {
-    // Fetch all profiles with their assigned paths
+    // OPTIMIZED: Fetch all profiles with their assigned paths in one query
     const { data: profiles, error: profilesError } = await supabaseAdmin
       .from('profiles')
       .select('id, name, email, assigned_path, gauntlet_level, experience_points, created_at')
-      .not('is_admin', 'eq', true); // Exclude admins
+      .eq('is_admin', false); // Use eq instead of not for better index usage
 
     if (profilesError) {
       throw new Error(`Failed to fetch profiles: ${profilesError.message}`);
     }
 
-    // Fetch all calls with logic gates
+    if (!profiles || profiles.length === 0) {
+      return {
+        reps: [],
+        pathComparison: [],
+        gateMastery: [],
+      };
+    }
+
+    // OPTIMIZED: Fetch all calls with logic gates in one query, ordered by user_id for efficient grouping
     const { data: calls, error: callsError } = await supabaseAdmin
       .from('calls')
       .select('user_id, goat_score, logic_gates, persona_mode, created_at')
-      .not('goat_score', 'is', null);
+      .not('goat_score', 'is', null)
+      .order('user_id', { ascending: true }); // Order by user_id for efficient grouping
 
     if (callsError) {
       throw new Error(`Failed to fetch calls: ${callsError.message}`);
     }
 
-    // Process each rep
-    const reps: RepAnalytics[] = await Promise.all(
-      (profiles || []).map(async (profile) => {
-        const userCalls = (calls || []).filter((call) => call.user_id === profile.id);
+    // OPTIMIZED: Pre-group calls by user_id to avoid repeated filtering
+    const callsByUserId = new Map<string, typeof calls>();
+    (calls || []).forEach((call) => {
+      if (!call.user_id) return;
+      if (!callsByUserId.has(call.user_id)) {
+        callsByUserId.set(call.user_id, []);
+      }
+      callsByUserId.get(call.user_id)!.push(call);
+    });
+
+    // Process each rep (now using pre-grouped calls)
+    const reps: RepAnalytics[] = profiles.map((profile) => {
+        const userCalls = callsByUserId.get(profile.id) || [];
         const scoredCalls = userCalls.filter((call) => call.goat_score !== null);
 
         // Calculate metrics
@@ -215,8 +233,7 @@ export async function getTrainingAnalytics(): Promise<TrainingAnalytics> {
           gateMastery,
           managerNote,
         };
-      })
-    );
+      });
 
     // Calculate path comparison
     const pathComparison: PathComparison[] = [

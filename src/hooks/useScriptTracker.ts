@@ -13,7 +13,7 @@ interface GateSimilarity {
 }
 
 interface ScriptTrackerResult {
-  currentGate: number; // 1-5
+  currentGate: number; // 1-8
   adherenceScore: number; // 0-100
   gateSimilarities: GateSimilarity[];
   isChecking: boolean;
@@ -119,7 +119,7 @@ export function useScriptTracker(
           (g: GateSimilarity) => g.gate === currentGate
         )?.similarity || 0;
 
-        if (currentGateSimilarity > SIMILARITY_THRESHOLD && currentGate < 5) {
+        if (currentGateSimilarity > SIMILARITY_THRESHOLD && currentGate < 8) {
           setCurrentGate((prev) => Math.min(5, prev + 1));
         }
 

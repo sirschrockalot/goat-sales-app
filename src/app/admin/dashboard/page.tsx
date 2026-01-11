@@ -25,6 +25,9 @@ import ErrorBoundary from '@/components/ErrorBoundary';
 import { useAuth } from '@/contexts/AuthContext';
 import UserManagement from '@/components/admin/UserManagement';
 import TrainingReport from '@/components/admin/TrainingReport';
+import AITrainingCenter from '@/components/admin/AITrainingCenter';
+import EvolutionReview from '@/components/admin/EvolutionReview';
+import CloserLeaderboard from '@/components/admin/CloserLeaderboard';
 
 interface Stats {
   totalCallsToday: number;
@@ -443,6 +446,21 @@ export default function AdminDashboard() {
         {/* Training Progress Report */}
         <div className="mb-8">
           <TrainingReport />
+        </div>
+
+        {/* AI Training Center */}
+        <div className="mb-8">
+          <AITrainingCenter />
+        </div>
+
+        {/* Evolution Approval Dashboard */}
+        <div className="mb-8">
+          <EvolutionReview />
+        </div>
+
+        {/* Closer Leaderboard */}
+        <div className="mb-8">
+          <CloserLeaderboard />
         </div>
 
         {/* User Management */}

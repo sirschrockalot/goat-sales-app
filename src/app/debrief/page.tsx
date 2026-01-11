@@ -30,15 +30,16 @@ export default function DebriefPage() {
 
   useEffect(() => {
     // After call ends, the webhook processes the transcript
-    // Poll for the most recent call result
-    const fetchLatestCall = async () => {
+    // Poll for the most recent call result with retries
+    const fetchLatestCall = async (retries = 5, delay = 2000) => {
       try {
-        // In production, you'd store the call ID from the webhook response
-        // For now, we'll fetch the most recent call for the user
-        const response = await fetch('/api/calls/latest');
+        const response = await fetch('/api/calls/latest', {
+          credentials: 'include',
+        });
+        
         if (response.ok) {
           const data = await response.json();
-          if (data) {
+          if (data && data.goat_score !== undefined) {
             setCallResult(data);
             
             // Generate feedback based on score
@@ -51,21 +52,36 @@ export default function DebriefPage() {
             } else {
               setFeedback('AI Coach: Review the GOAT Framework. Focus on setting the Approval/Denial frame from the start.');
             }
+            setLoading(false);
+            return; // Success, stop retrying
           }
+        } else if (response.status === 404) {
+          // Call not found yet, retry if we have retries left
+          if (retries > 0) {
+            console.log(`Call not found yet, retrying... (${retries} retries left)`);
+            setTimeout(() => fetchLatestCall(retries - 1, delay), delay);
+            return;
+          }
+        }
+        
+        // If we get here, either no data or out of retries
+        if (retries === 0) {
+          console.error('Failed to fetch call result after retries');
+          setLoading(false);
         }
       } catch (error) {
         console.error('Error fetching call result:', error);
-      } finally {
-        setLoading(false);
+        // Retry on error if we have retries left
+        if (retries > 0) {
+          setTimeout(() => fetchLatestCall(retries - 1, delay), delay);
+        } else {
+          setLoading(false);
+        }
       }
     };
 
-    // Wait a moment for webhook to process, then fetch
-    const timer = setTimeout(() => {
-      fetchLatestCall();
-    }, 2000);
-
-    return () => clearTimeout(timer);
+    // Start fetching with retries
+    fetchLatestCall();
   }, []);
 
   const getGradeFromScore = (score: number): string => {
@@ -102,10 +118,20 @@ export default function DebriefPage() {
     );
   }
 
-  if (!callResult) {
+  if (!callResult && !loading) {
     return (
       <div className="min-h-screen bg-[#0B0E14] text-white p-6 flex flex-col items-center justify-center max-w-md mx-auto">
-        <div className="text-red-400 mb-4">Call analysis not available</div>
+        <div className="text-center mb-6">
+          <div className="text-red-400 mb-2">Call analysis not available</div>
+          <div className="text-sm text-gray-400 mb-4">
+            The call transcript may not have been processed yet. This can happen if:
+          </div>
+          <ul className="text-xs text-gray-500 text-left space-y-1 mb-4">
+            <li>• The call was too short</li>
+            <li>• No transcript was generated</li>
+            <li>• The webhook is still processing</li>
+          </ul>
+        </div>
         <button
           onClick={() => router.push('/')}
           className="px-4 py-2 rounded-2xl bg-[#22C55E] text-white"

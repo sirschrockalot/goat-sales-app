@@ -9,10 +9,11 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { LogIn, Mail, Lock, Eye, EyeOff, Sparkles } from 'lucide-react';
-import { createSupabaseClient } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -22,16 +23,14 @@ export default function LoginPage() {
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    // Check if user is already logged in
-    const checkSession = async () => {
-      const supabase = createSupabaseClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
+    // Only redirect if auth is done loading and user exists
+    // And only if we're not already on the home page
+    if (!authLoading && user) {
+      if (typeof window !== 'undefined' && window.location.pathname !== '/') {
         router.push('/');
       }
-    };
-    checkSession();
-  }, [router]);
+    }
+  }, [user, authLoading]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,6 +39,7 @@ export default function LoginPage() {
     setMessage(null);
 
     try {
+      const { createSupabaseClient } = await import('@/lib/supabase');
       const supabase = createSupabaseClient();
 
       if (isSignUp) {

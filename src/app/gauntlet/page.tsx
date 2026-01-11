@@ -26,6 +26,7 @@ export default function GauntletPage() {
   const [progress, setProgress] = useState<GauntletProgress | null>(null);
   const [loadingProgress, setLoadingProgress] = useState(true);
   const [selectedPath, setSelectedPath] = useState<TrainingPath>('acquisition');
+  const [learningMode, setLearningMode] = useState<boolean>(false);
 
   const levels = getAllGauntletLevels();
   const userLevel = progress?.gauntlet_level || 1;
@@ -58,6 +59,14 @@ export default function GauntletPage() {
 
   const handleStartChallenge = async (level: GauntletLevel) => {
     try {
+      // Request microphone permission before starting challenge
+      if (typeof window !== 'undefined' && navigator.mediaDevices) {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        // Stop the stream immediately - we just needed permission
+        stream.getTracks().forEach(track => track.stop());
+        console.log('✅ Microphone permission granted');
+      }
+
       // Create assistant for this gauntlet level
       const response = await fetch('/api/vapi/create-assistant', {
         method: 'POST',
@@ -66,6 +75,7 @@ export default function GauntletPage() {
           gauntletLevel: level, // Pass gauntlet level instead of difficulty
           personaMode: selectedPath, // Use selected path (acquisition or disposition)
           voiceHintsEnabled: false, // No hints in gauntlet mode
+          roleReversal: learningMode, // Enable role reversal in learning mode
         }),
       });
 
@@ -75,13 +85,19 @@ export default function GauntletPage() {
 
       const { assistantId } = await response.json();
 
-      // Navigate to live call with gauntlet level and path
-      router.push(`/live-call?mode=${selectedPath}&persona=gauntlet-${level}&assistantId=${assistantId}&gauntletLevel=${level}&path=${selectedPath}`);
+      // Navigate to live call with gauntlet level, path, and learning mode
+      router.push(`/live-call?mode=${selectedPath}&persona=gauntlet-${level}&assistantId=${assistantId}&gauntletLevel=${level}&path=${selectedPath}&learningMode=${learningMode}`);
     } catch (error) {
       if (process.env.NODE_ENV === 'development') {
         console.error('Error starting gauntlet challenge:', error);
       }
-      alert('Failed to start challenge. Please try again.');
+      
+      // Check if it's a microphone permission error
+      if (error instanceof Error && error.name === 'NotAllowedError') {
+        alert('Microphone access is required for voice calls. Please allow microphone access and try again.');
+      } else {
+        alert('Failed to start challenge. Please try again.');
+      }
     }
   };
 
@@ -151,6 +167,48 @@ export default function GauntletPage() {
               </span>
             </div>
           </button>
+        </div>
+
+        {/* Learning Mode Toggle */}
+        <div className="mb-6 rounded-xl p-4 border border-white/10 bg-white/5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-semibold text-white mb-1">Training Mode</h3>
+              <p className="text-xs text-gray-400">
+                {learningMode 
+                  ? 'Learning Mode: Watch the AI demonstrate perfect script adherence'
+                  : 'Practice Mode: You are the acquisition agent'}
+              </p>
+            </div>
+            <button
+              onClick={() => setLearningMode(!learningMode)}
+              className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors ${
+                learningMode ? 'bg-[#22C55E]' : 'bg-gray-600'
+              }`}
+            >
+              <span
+                className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
+                  learningMode ? 'translate-x-9' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+          <div className="mt-3 flex gap-2">
+            <span className={`text-xs px-3 py-1 rounded-full ${
+              !learningMode 
+                ? 'bg-[#22C55E]/20 text-[#22C55E] border border-[#22C55E]/50' 
+                : 'bg-white/5 text-gray-400 border border-white/10'
+            }`}>
+              Practice Mode
+            </span>
+            <span className={`text-xs px-3 py-1 rounded-full ${
+              learningMode 
+                ? 'bg-[#22C55E]/20 text-[#22C55E] border border-[#22C55E]/50' 
+                : 'bg-white/5 text-gray-400 border border-white/10'
+            }`}>
+              Learning Mode
+            </span>
+          </div>
         </div>
 
         {/* Current Level Badge */}

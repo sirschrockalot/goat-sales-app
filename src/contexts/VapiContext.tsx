@@ -27,12 +27,16 @@ interface VapiContextType {
   callId: string | null;
   controlUrl: string | null;
   
+  // Training Session Data (for webhook)
+  scriptHiddenDuration?: number; // Seconds with script hidden
+  
   // Actions
   initialize: (apiKey: string, mode: PersonaMode, assistantId?: string) => Promise<void>;
   startCall: () => Promise<void>;
   endCall: () => Promise<void>;
   toggleMute: () => Promise<void>;
   setPersonaMode: (mode: PersonaMode) => Promise<void>;
+  sendMessage: (message: string) => void; // Send control message (e.g., voice hints)
   
   // Reset
   reset: () => void;
@@ -56,6 +60,7 @@ export function VapiProvider({ children }: VapiProviderProps) {
   const [personaMode, setPersonaModeState] = useState<PersonaMode | null>(null);
   const [callId, setCallId] = useState<string | null>(null);
   const [controlUrl, setControlUrl] = useState<string | null>(null);
+  const [scriptHiddenDuration, setScriptHiddenDuration] = useState<number>(0);
 
   // Derived state
   const isConnecting = callStatus.status === 'connecting';
@@ -130,12 +135,69 @@ export function VapiProvider({ children }: VapiProviderProps) {
   const endCall = useCallback(async () => {
     try {
       const client = getVapiClient();
+      
+      // Get transcript before ending call
+      const currentTranscript = transcript;
+      const currentCallId = callId;
+      const currentPersonaMode = personaMode;
+      
+      // End the call via Vapi SDK
       await client.endCall();
+      
+      // If we have a transcript, manually trigger webhook processing
+      // This ensures analysis happens even if Vapi webhook is delayed or fails
+      if (currentTranscript && currentCallId) {
+        try {
+          // Get user session for authentication
+          const { createSupabaseClient } = await import('@/lib/supabase');
+          const supabase = createSupabaseClient();
+          const { data: { session } } = await supabase.auth.getSession();
+          const accessToken = session?.access_token;
+
+          const headers: HeadersInit = {
+            'Content-Type': 'application/json',
+          };
+
+          if (accessToken) {
+            headers['Authorization'] = `Bearer ${accessToken}`;
+          }
+
+          // Get script hidden duration from window (set by LiveCallHUD) or context
+          const currentScriptHiddenDuration = typeof window !== 'undefined' 
+            ? ((window as any).__scriptHiddenDuration || scriptHiddenDuration || 0)
+            : (scriptHiddenDuration || 0);
+
+          // Manually trigger webhook processing with collected transcript
+          await fetch('/api/vapi-webhook', {
+            method: 'POST',
+            headers,
+            credentials: 'include',
+            body: JSON.stringify({
+              type: 'end-of-call-report',
+              call: {
+                id: currentCallId,
+                status: 'ended',
+                transcript: currentTranscript,
+                metadata: {
+                  userId: session?.user?.id,
+                  personaMode: currentPersonaMode || 'acquisition',
+                  source: 'vapi',
+                  manuallyTriggered: true, // Flag to indicate manual trigger
+                  scriptHiddenDuration: currentScriptHiddenDuration, // Include Pro Mode duration
+                },
+              },
+            }),
+          });
+        } catch (webhookError) {
+          // Log but don't throw - webhook might still come from Vapi
+          console.warn('Failed to manually trigger webhook, Vapi may send it automatically:', webhookError);
+        }
+      }
     } catch (error) {
       console.error('Failed to end call:', error);
       throw error;
     }
-  }, []);
+  }, [transcript, callId, personaMode]);
 
   // Toggle mute
   const toggleMute = useCallback(async () => {
@@ -157,6 +219,16 @@ export function VapiProvider({ children }: VapiProviderProps) {
     } catch (error) {
       console.error('Failed to update persona mode:', error);
       throw error;
+    }
+  }, []);
+
+  // Send control message (e.g., voice hints)
+  const sendMessage = useCallback((message: string) => {
+    try {
+      const client = getVapiClient();
+      client.sendMessage(message);
+    } catch (error) {
+      console.error('Failed to send message:', error);
     }
   }, []);
 
@@ -193,11 +265,13 @@ export function VapiProvider({ children }: VapiProviderProps) {
     personaMode,
     callId,
     controlUrl,
+    scriptHiddenDuration,
     initialize,
     startCall,
     endCall,
     toggleMute,
     setPersonaMode,
+    sendMessage,
     reset,
   };
 

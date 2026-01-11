@@ -8,6 +8,36 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin, createSupabaseClient } from '@/lib/supabase';
 import { getTrainingAnalytics } from '@/lib/getTrainingAnalytics';
 
+// Cache configuration
+const CACHE_DURATION = 60; // Cache for 60 seconds
+const cache = new Map<string, { data: any; timestamp: number }>();
+
+/**
+ * Get cached data or fetch fresh
+ */
+function getCachedData(key: string): any | null {
+  const cached = cache.get(key);
+  if (cached && Date.now() - cached.timestamp < CACHE_DURATION * 1000) {
+    return cached.data;
+  }
+  return null;
+}
+
+/**
+ * Set cached data
+ */
+function setCachedData(key: string, data: any): void {
+  cache.set(key, { data, timestamp: Date.now() });
+  
+  // Clean up old cache entries (keep only last 10)
+  if (cache.size > 10) {
+    const entries = Array.from(cache.entries())
+      .sort((a, b) => b[1].timestamp - a[1].timestamp);
+    cache.clear();
+    entries.slice(0, 10).forEach(([k, v]) => cache.set(k, v));
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     // Get authenticated user
@@ -36,10 +66,37 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get training analytics
-    const analytics = await getTrainingAnalytics();
+    // Check cache first (Stale-While-Revalidate pattern)
+    const cacheKey = 'training-analytics';
+    const cachedData = getCachedData(cacheKey);
+    
+    // Return cached data immediately if available
+    if (cachedData) {
+      // Revalidate in background (don't await)
+      getTrainingAnalytics()
+        .then((freshData) => setCachedData(cacheKey, freshData))
+        .catch((error) => console.error('Background cache refresh failed:', error));
+      
+      return NextResponse.json(cachedData, {
+        headers: {
+          'Cache-Control': `public, s-maxage=${CACHE_DURATION}, stale-while-revalidate=300`,
+          'X-Cache': 'HIT',
+        },
+      });
+    }
 
-    return NextResponse.json(analytics);
+    // Fetch fresh data
+    const analytics = await getTrainingAnalytics();
+    
+    // Cache the result
+    setCachedData(cacheKey, analytics);
+
+    return NextResponse.json(analytics, {
+      headers: {
+        'Cache-Control': `public, s-maxage=${CACHE_DURATION}, stale-while-revalidate=300`,
+        'X-Cache': 'MISS',
+      },
+    });
   } catch (error) {
     console.error('Error in GET /api/admin/training-analytics:', error);
     return NextResponse.json(

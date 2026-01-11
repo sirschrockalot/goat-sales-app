@@ -7,8 +7,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { gradeCall } from '@/lib/grading';
 import { gradeDispoCall } from '@/lib/dispoGrading';
 import { analyzeDeviation } from '@/lib/analyzeDeviation';
+import { analyzeSentiment } from '@/lib/analyzeSentiment';
 import { supabaseAdmin } from '@/lib/supabase';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
+import { getUserFromRequest } from '@/lib/getUserFromRequest';
 
 interface VapiWebhookPayload {
   type: string;
@@ -112,7 +114,7 @@ export async function POST(request: NextRequest) {
       // Grade the call using appropriate grading function
       const gradingResult = personaMode === 'disposition' 
         ? await gradeDispoCall(transcript)
-        : await gradeCall(transcript);
+        : await gradeCall(transcript, false); // Aircall doesn't support role reversal
 
       // Analyze script deviation (pass mode for correct table selection)
       const deviationAnalysis = await analyzeDeviation(transcript, personaMode);
@@ -211,26 +213,50 @@ export async function POST(request: NextRequest) {
     }
 
     const { call } = body;
-    const transcript = call.transcript || '';
-    const userId = call.metadata?.userId;
+    let transcript = call.transcript || '';
+    let userId = call.metadata?.userId;
     const personaMode = call.metadata?.personaMode || 'acquisition';
     const personaId = call.metadata?.personaId;
+    const manuallyTriggered = call.metadata?.manuallyTriggered || false;
+    const roleReversal = call.metadata?.roleReversal === true || call.metadata?.learningMode === true;
 
-    if (!transcript || !userId) {
-      console.warn('Missing transcript or userId in webhook payload');
-      return NextResponse.json({ received: true }, { status: 200 });
+    // If manually triggered and missing userId, try to get from auth
+    if (!userId && manuallyTriggered) {
+      try {
+        const { user } = await getUserFromRequest(request);
+        if (user) {
+          userId = user.id;
+        }
+      } catch (error) {
+        console.warn('Could not get userId from request:', error);
+      }
     }
 
-    // Grade the call using OpenAI
-    const gradingResult = await gradeCall(transcript);
+    if (!transcript || !userId) {
+      console.warn('Missing transcript or userId in webhook payload', {
+        hasTranscript: !!transcript,
+        hasUserId: !!userId,
+        transcriptLength: transcript.length,
+        manuallyTriggered,
+      });
+      return NextResponse.json({ 
+        received: true, 
+        message: 'Missing transcript or userId',
+        hasTranscript: !!transcript,
+        hasUserId: !!userId,
+      }, { status: 200 });
+    }
 
-      // Analyze script deviation (pass mode for correct table selection)
-      const deviationAnalysis = await analyzeDeviation(transcript, personaMode);
+    // Analyze script deviation (pass mode for correct table selection)
+    const deviationAnalysis = await analyzeDeviation(transcript, personaMode);
 
-      // Grade the call using appropriate grading function
+    // Grade the call using appropriate grading function (pass roleReversal for Learning Mode)
+      // Get exit strategy from metadata if available
+      const exitStrategy = (call.metadata as any)?.exitStrategy || 'fix_and_flip';
+      
       const gradingResult = personaMode === 'disposition' 
         ? await gradeDispoCall(transcript)
-        : await gradeCall(transcript);
+        : await gradeCall(transcript, roleReversal);
 
       // Calculate logic gates array for database based on mode
       const logicGates = personaMode === 'disposition' ? [
@@ -294,9 +320,10 @@ export async function POST(request: NextRequest) {
         const callEndTime = Date.now();
         const callDuration = Math.floor((callEndTime - callStartTime) / 1000); // Duration in seconds
         const goatModeDuration = call.metadata?.goatModeDuration || 0; // Seconds in Goat Mode
+        const scriptHiddenDuration = call.metadata?.scriptHiddenDuration || 0; // Pro Mode duration
 
-        // Award XP if Goat Mode was active
-        if (goatModeDuration > 0) {
+        // Award XP if Goat Mode was active or Pro Mode time was spent
+        if (goatModeDuration > 0 || scriptHiddenDuration > 0) {
           try {
             await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/goat-mode/award-xp`, {
               method: 'POST',
@@ -305,6 +332,7 @@ export async function POST(request: NextRequest) {
                 userId,
                 callDuration,
                 goatModeDuration,
+                scriptHiddenDuration, // Include Pro Mode duration for 1.5x XP multiplier
                 goatScore: gradingResult.goatScore,
               }),
             });
@@ -312,6 +340,45 @@ export async function POST(request: NextRequest) {
             // Silently fail - XP awarding is not critical
             if (process.env.NODE_ENV === 'development') {
               console.error('Error awarding XP:', error);
+            }
+          }
+        }
+
+        // CONTINUOUS LEARNING LOOP: Analyze sentiment BEFORE saving call
+        // This allows us to store sentiment_score in metadata for prompt evolution
+        let sentimentAnalysis: any = null;
+        if (transcript && transcript.length > 100) {
+          try {
+            sentimentAnalysis = await analyzeSentiment(transcript);
+            
+            // If humanity score is below 80%, log optimizations
+            if (sentimentAnalysis.humanityScore < 80) {
+              const assistantId = personaId || 'unknown';
+              
+              // Save each suggested improvement to ai_optimizations table
+              for (const improvement of sentimentAnalysis.suggestedImprovements) {
+                try {
+                  await supabaseAdmin
+                    .from('ai_optimizations')
+                    .insert({
+                      assistant_id: assistantId,
+                      call_id: null, // Will be updated after call is saved
+                      detected_weakness: improvement.weakness,
+                      suggested_prompt_tweak: improvement.suggestion,
+                      sentiment_score: sentimentAnalysis.humanityScore,
+                      humanity_score: sentimentAnalysis.humanityScore,
+                      priority: improvement.priority,
+                      applied: false,
+                    });
+                } catch (error) {
+                  console.error('Error saving AI optimization:', error);
+                }
+              }
+            }
+          } catch (error) {
+            // Silently fail - sentiment analysis is not critical
+            if (process.env.NODE_ENV === 'development') {
+              console.error('Error analyzing sentiment:', error);
             }
           }
         }
@@ -330,10 +397,24 @@ export async function POST(request: NextRequest) {
             logic_gates: logicGates,
             rebuttal_of_the_day: gradingResult.rebuttalOfTheDay,
             script_adherence: deviationAnalysis, // Store deviation analysis
+            script_hidden_duration: scriptHiddenDuration, // Pro Mode duration for XP multiplier
+            // Deal tracking fields
+            contract_signed: gradingResult.dealTracking?.contractSigned || false,
+            suggested_buy_price: gradingResult.dealTracking?.suggestedBuyPrice || null,
+            final_offer_price: gradingResult.dealTracking?.finalOfferPrice || null,
+            price_variance: gradingResult.dealTracking?.priceVariance || null,
             metadata: {
               ...(gauntletLevel ? { gauntlet_level: gauntletLevel } : {}),
               callDuration,
               goatModeDuration,
+              scriptHiddenDuration,
+              // Store sentiment analysis results for prompt evolution
+              sentiment_score: sentimentAnalysis?.humanityScore || null,
+              humanity_score: sentimentAnalysis?.humanityScore || null,
+              // Store exit strategy for negotiation precision scoring
+              exitStrategy: exitStrategy,
+              // Store negotiation precision scores
+              negotiationPrecision: gradingResult.negotiationPrecision || null,
             },
             ended_at: new Date().toISOString(),
           })
@@ -342,10 +423,31 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error('Error storing call in database:', error);
+      console.error('Error details:', JSON.stringify(error, null, 2));
       return NextResponse.json(
-        { error: 'Failed to store call' },
+        { 
+          error: 'Failed to store call',
+          details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        },
         { status: 500 }
       );
+    }
+
+    // Update optimizations with call_id now that we have it
+    if (sentimentAnalysis && sentimentAnalysis.humanityScore < 80) {
+      try {
+        await supabaseAdmin
+          .from('ai_optimizations')
+          .update({ call_id: data.id })
+          .is('call_id', null)
+          .eq('assistant_id', personaId || 'unknown')
+          .gte('created_at', new Date(Date.now() - 60000).toISOString()); // Last minute
+      } catch (error) {
+        // Silently fail - not critical
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Error updating optimization call_id:', error);
+        }
+      }
     }
 
     return NextResponse.json({

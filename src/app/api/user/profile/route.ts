@@ -4,13 +4,22 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin, createSupabaseClient } from '@/lib/supabase';
+import { supabaseAdmin } from '@/lib/supabase';
+import { getUserFromRequest } from '@/lib/getUserFromRequest';
 
 export async function GET(request: NextRequest) {
   try {
-    // Get authenticated user from Supabase auth
-    const supabase = createSupabaseClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    // Check if supabaseAdmin is available
+    if (!supabaseAdmin) {
+      console.error('supabaseAdmin not initialized - missing SUPABASE_SERVICE_ROLE_KEY');
+      return NextResponse.json(
+        { error: 'Server configuration error' },
+        { status: 500 }
+      );
+    }
+
+    // Get authenticated user from request cookies
+    const { user, error: authError } = await getUserFromRequest(request);
 
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

@@ -8,7 +8,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { createSupabaseClient } from '@/lib/supabase';
-import type { User } from '@supabase/supabase-js';
+import type { User, SupabaseClient } from '@supabase/supabase-js';
 
 interface UserProfile {
   id: string;
@@ -35,26 +35,61 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const supabase = createSupabaseClient();
+  const [supabaseError, setSupabaseError] = useState<Error | null>(null);
+  
+  // Initialize supabase client safely
+  let supabase: SupabaseClient | null = null;
+  try {
+    supabase = createSupabaseClient();
+  } catch (error) {
+    console.error('Failed to initialize Supabase client:', error);
+    setSupabaseError(error as Error);
+    setLoading(false);
+    // Don't throw - allow component to render with error state
+  }
 
   const fetchProfile = async (authUser: User | null) => {
     try {
-      if (!authUser) {
+      if (!authUser || !supabase) {
         setUser(null);
         setLoading(false);
         return;
       }
 
       // Fetch profile from API (which uses server-side auth)
-      const response = await fetch('/api/user/profile');
+      // Get the session token from Supabase and include it in the request
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+
+      // Include access token in Authorization header if available
+      if (accessToken) {
+        headers['Authorization'] = `Bearer ${accessToken}`;
+      }
+
+      const response = await fetch('/api/user/profile', {
+        method: 'GET',
+        headers,
+        credentials: 'include', // Also send cookies
+      });
       if (response.ok) {
         const data = await response.json();
-        setUser(data);
+        setUser({
+          id: data.id,
+          name: data.name,
+          email: data.email,
+          is_admin: data.is_admin || false,
+          dailyStreak: data.daily_streak || 0,
+        });
       } else if (response.status === 401) {
-        // Not authenticated
+        // Not authenticated - this is normal if user is not logged in
         setUser(null);
       } else {
         // Profile might not exist yet (will be created by trigger)
+        // Use fallback data from auth user
         setUser({
           id: authUser.id,
           name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User',
@@ -74,9 +109,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   useEffect(() => {
+    if (!supabase || supabaseError) {
+      setLoading(false);
+      return;
+    }
+
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       fetchProfile(session?.user ?? null);
+    }).catch((error) => {
+      console.error('Error getting session:', error);
+      setLoading(false);
     });
 
     // Listen for auth changes
@@ -89,14 +132,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
+  }, [supabase, supabaseError]);
 
   const refreshProfile = async () => {
+    if (!supabase) return;
     const { data: { session } } = await supabase.auth.getSession();
     await fetchProfile(session?.user ?? null);
   };
 
   const signOut = async () => {
+    if (!supabase) return;
     await supabase.auth.signOut();
     setUser(null);
   };

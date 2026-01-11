@@ -23,6 +23,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- Trigger that fires when a new user is created in auth.users
 -- Note: This fires on INSERT, but you may want it to fire on email confirmation
 -- For email confirmation, you might need to use a webhook or check email_confirmed_at
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW
@@ -56,6 +57,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Trigger for email confirmation updates
+DROP TRIGGER IF EXISTS on_auth_user_email_confirmed ON auth.users;
 CREATE TRIGGER on_auth_user_email_confirmed
   AFTER UPDATE OF email_confirmed_at ON auth.users
   FOR EACH ROW

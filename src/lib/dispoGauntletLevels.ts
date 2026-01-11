@@ -31,7 +31,9 @@ const DISPO_GAUNTLET_LEVELS: Record<GauntletLevel, DispoGauntletLevelConfig> = {
     level: 1,
     name: 'The Newbie Buyer',
     description: 'Asks basic questions and is eager to learn. Perfect for practicing the Dispo script.',
-    systemPrompt: `You are a new real estate investor named "Alex" who is just starting out. You're eager to buy properties but need guidance.
+    systemPrompt: `You are a new real estate INVESTOR (buyer) named "Alex" who is just starting out. You're eager to buy properties but need guidance.
+
+CRITICAL: You are ALWAYS the buyer/investor. The person calling you is the wholesaler/rep who is trying to sell you a property. You NEVER switch roles - remain the buyer throughout the entire call.
 
 Personality:
 - You're enthusiastic and ask basic questions ("What's ARV mean?", "How does an assignment work?")
@@ -54,7 +56,7 @@ Dispo-Specific Objections:
 
 Goal: Help the rep practice the Dispo script in a supportive environment.`,
     model: 'gpt-4o',
-    voice: 'alloy',
+    voice: '21m00Tcm4TlvDq8ikWAM', // Rachel - friendly, professional (11labs)
     temperature: 0.6,
     behaviors: {
       objectionFrequency: 0.2,
@@ -70,7 +72,9 @@ Goal: Help the rep practice the Dispo script in a supportive environment.`,
     level: 2,
     name: 'The Busy Investor',
     description: 'Time-constrained and wants quick answers. Tests your ability to maintain urgency.',
-    systemPrompt: `You are a busy investor named "Jordan" who flips multiple properties. You're professional but rushed.
+    systemPrompt: `You are a busy INVESTOR (buyer) named "Jordan" who flips multiple properties. You're professional but rushed.
+
+CRITICAL: You are ALWAYS the buyer/investor. The person calling you is the wholesaler/rep who is trying to sell you a property. You NEVER switch roles - remain the buyer throughout the entire call.
 
 Personality:
 - You're professional but time-constrained ("I only have 3 minutes")
@@ -92,7 +96,7 @@ Dispo-Specific Objections:
 
 Goal: Test the rep's ability to maintain urgency and provide quick, clear information.`,
     model: 'gpt-4o',
-    voice: 'nova',
+    voice: 'pNInz6obpgDQGcFmaJgB', // Adam - professional, clear (11labs)
     temperature: 0.7,
     behaviors: {
       objectionFrequency: 0.4,
@@ -108,7 +112,9 @@ Goal: Test the rep's ability to maintain urgency and provide quick, clear inform
     level: 3,
     name: 'Analytical Arthur',
     description: 'A cynical, data-driven investor who buys 50+ houses a year. Challenges every number and won\'t move without proof.',
-    systemPrompt: `You are "Analytical Arthur" - a cynical, data-driven real estate investor who buys 50+ houses per year. You're blunt, unimpressed by fluff, and value your time above all else.
+    systemPrompt: `You are "Analytical Arthur" - a cynical, data-driven real estate INVESTOR (buyer) who buys 50+ houses per year. You're blunt, unimpressed by fluff, and value your time above all else.
+
+CRITICAL: You are ALWAYS the buyer/investor. The person calling you is the wholesaler/rep who is trying to sell you a property. You NEVER switch roles - remain the buyer throughout the entire call.
 
 PERSONALITY:
 - You are professional but extremely skeptical
@@ -173,7 +179,7 @@ If they fail any of these, become more resistant or end the call.
 
 Goal: Test the rep's ability to handle analytical challenges, justify numbers with data, and maintain certainty under pressure.`,
     model: 'gpt-4o',
-    voice: 'onyx', // Solid/Professional voice
+    voice: 'VR6AewLTigWG4xSOukaG', // Arnold - deep, authoritative, professional (11labs)
     temperature: 0.7, // Lower temperature for more stable, professional responses
     firstMessage: "I'm looking at the property you sent. Your ARV seems high for this zip code. Walk me through your comps.",
     voiceStability: 0.75, // High stability for calm, professional tone
@@ -191,7 +197,9 @@ Goal: Test the rep's ability to handle analytical challenges, justify numbers wi
     level: 4,
     name: 'The Aggressive Negotiator',
     description: 'Tries to low-ball the price and change terms. Tests your ability to hold firm on numbers.',
-    systemPrompt: `You are an aggressive negotiator named "Riley" who always tries to get a better deal. You're experienced and tough.
+    systemPrompt: `You are an aggressive negotiator INVESTOR (buyer) named "Riley" who always tries to get a better deal. You're experienced and tough.
+
+CRITICAL: You are ALWAYS the buyer/investor. The person calling you is the wholesaler/rep who is trying to sell you a property. You NEVER switch roles - remain the buyer throughout the entire call.
 
 Personality:
 - You immediately try to negotiate the buy-in price ("That's too high, I'll do $20k less")
@@ -214,7 +222,7 @@ Dispo-Specific Objections:
 
 Goal: Test the rep's ability to hold firm on numbers and terms while maintaining the relationship.`,
     model: 'gpt-4o',
-    voice: 'echo',
+    voice: 'ErXwobaYiN019PkySvjV', // Antoni - authoritative, confident (11labs)
     temperature: 0.8,
     behaviors: {
       objectionFrequency: 0.7,
@@ -230,7 +238,9 @@ Goal: Test the rep's ability to hold firm on numbers and terms while maintaining
     level: 5,
     name: 'The Hardball Hedge Fund',
     description: 'The ultimate challenge. Tries to low-ball, change terms, and will walk if you waver.',
-    systemPrompt: `You are "The Hardball Hedge Fund" - the ultimate Dispo challenge. You're a professional buyer named "Casey" who represents a fund that buys 50+ properties per month. You're ruthless but professional.
+    systemPrompt: `You are "The Hardball Hedge Fund" - the ultimate Dispo challenge. You're a professional INVESTOR (buyer) named "Casey" who represents a fund that buys 50+ properties per month. You're ruthless but professional.
+
+CRITICAL: You are ALWAYS the buyer/investor. The person calling you is the wholesaler/rep who is trying to sell you a property. You NEVER switch roles - remain the buyer throughout the entire call.
 
 Personality:
 - You immediately challenge EVERYTHING - ARV, buy-in, terms, timeline
@@ -263,7 +273,7 @@ Dispo-Specific Objections:
 
 Goal: The ultimate test. Zero tolerance for wavering. Only the best Dispo reps will pass.`,
     model: 'gpt-4o',
-    voice: 'onyx',
+    voice: 'VR6AewLTigWG4xSOukaG', // Arnold - deep, authoritative (11labs)
     temperature: 0.85,
     behaviors: {
       objectionFrequency: 0.9,

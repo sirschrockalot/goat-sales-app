@@ -70,6 +70,7 @@ export default function PersonaSelector() {
   const searchParams = useSearchParams();
   const mode = (searchParams.get('mode') || 'acquisition') as PersonaMode;
   const [selectedIndex, setSelectedIndex] = useState(1);
+  const [roleReversal, setRoleReversal] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const personas = mode === 'acquisition' ? ACQUISITION_PERSONAS : DISPOSITION_PERSONAS;
@@ -83,9 +84,28 @@ export default function PersonaSelector() {
     }
   }, [selectedIndex]);
 
-  const handleStartCall = () => {
-    const selectedPersona = personas[selectedIndex];
-    router.push(`/live-call?mode=${mode}&persona=${selectedPersona.id}`);
+  const handleStartCall = async () => {
+    // Request microphone permission before navigating to call
+    try {
+      if (typeof window !== 'undefined' && navigator.mediaDevices) {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        // Stop the stream immediately - we just needed permission
+        stream.getTracks().forEach(track => track.stop());
+        console.log('✅ Microphone permission granted');
+      }
+      
+      // Navigate to live call page
+      const selectedPersona = personas[selectedIndex];
+      const params = new URLSearchParams({
+        mode,
+        persona: selectedPersona.id,
+        ...(roleReversal && mode === 'acquisition' ? { roleReversal: 'true' } : {}),
+      });
+      router.push(`/live-call?${params.toString()}`);
+    } catch (error) {
+      console.error('❌ Microphone permission denied:', error);
+      alert('Microphone access is required for voice calls. Please allow microphone access and try again.');
+    }
   };
 
   const getDifficultyColor = (difficulty: string) => {
@@ -170,12 +190,41 @@ export default function PersonaSelector() {
         </div>
       </div>
 
+      {/* Role Reversal Toggle (Acquisition Mode Only) */}
+      {mode === 'acquisition' && (
+        <div className="mb-4 p-4 rounded-xl border" style={{
+          backgroundColor: 'rgba(255, 255, 255, 0.05)',
+          borderColor: 'rgba(255, 255, 255, 0.1)'
+        }}>
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <div className="text-sm font-semibold text-white mb-1">🎓 Learning Mode</div>
+              <div className="text-xs text-gray-400">
+                AI acts as acquisition agent • You act as seller • Learn by example
+              </div>
+            </div>
+            <button
+              onClick={() => setRoleReversal(!roleReversal)}
+              className={`relative w-14 h-8 rounded-full transition-all duration-300 ${
+                roleReversal ? 'bg-[#22C55E]' : 'bg-gray-600'
+              }`}
+            >
+              <div
+                className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full transition-all duration-300 ${
+                  roleReversal ? 'translate-x-6' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Start Call Button */}
       <button
         onClick={handleStartCall}
         className="w-full py-4 rounded-2xl font-bold text-lg bg-[#22C55E] text-white active:scale-[0.98] transition-all duration-200 mb-6 breathing-glow"
       >
-        START CALL
+        {roleReversal && mode === 'acquisition' ? 'START LEARNING CALL' : 'START CALL'}
       </button>
     </div>
   );

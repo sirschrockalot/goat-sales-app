@@ -6,8 +6,8 @@
  * Shows adherence status with visual feedback
  */
 
-import { motion } from 'framer-motion';
-import { useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useEffect, useRef, useState } from 'react';
 import { useScriptTracker, LOW_SIMILARITY_THRESHOLD, SIMILARITY_THRESHOLD } from '@/hooks/useScriptTracker';
 import { useVapi } from '@/contexts/VapiContext';
 import { getSoundboard } from '@/lib/soundboard';
@@ -16,22 +16,29 @@ interface ScriptProgressProps {
   className?: string;
   isActive?: boolean;
   voiceHintEnabled?: boolean;
+  isScriptVisible?: boolean; // Training mode: hide script text when false
 }
 
 const ACQUISITION_GATE_NAMES = [
   'Intro',
-  'Fact Find',
-  'Pitch',
+  'Motivation',
+  'Condition',
+  'Numbers',
+  'Hold',
   'Offer',
-  'Close',
+  'Expectations',
+  'Commitment',
 ];
 
 const ACQUISITION_GATE_FULL_NAMES = [
-  'The Intro (Approval/Denial)',
-  'Fact Find (The Why)',
-  'The Pitch (Inside/Outside)',
-  'The Offer (Virtual Withdraw)',
-  'The Close (Agreement)',
+  'Intro (Contact/Credibility)',
+  'Fact Find - Motivation',
+  'Fact Find - Condition',
+  'Transition to Numbers',
+  'Running Comps / Hold',
+  'The Offer',
+  'The Close - Expectations',
+  'Final Commitment',
 ];
 
 const DISPO_GATE_NAMES = [
@@ -50,14 +57,18 @@ const DISPO_GATE_FULL_NAMES = [
   'The Close (Agreement & Next Steps)',
 ];
 
-export default function ScriptProgress({ className = '', isActive: propIsActive, voiceHintEnabled = false }: ScriptProgressProps) {
+export default function ScriptProgress({ className = '', isActive: propIsActive, voiceHintEnabled = false, isScriptVisible = true }: ScriptProgressProps) {
   const { isActive: contextIsActive, personaMode } = useVapi();
   const isActive = propIsActive ?? contextIsActive;
   const mode = personaMode || 'acquisition';
   const scriptTracker = useScriptTracker(isActive || false, voiceHintEnabled, mode);
-  const { currentGate, adherenceScore, gateSimilarities, isChecking } = scriptTracker;
+  const { currentGate, adherenceScore, gateSimilarities, isChecking, isGoatModeActive } = scriptTracker;
   const previousPassedGatesRef = useRef<Set<number>>(new Set());
   const soundboard = getSoundboard();
+  
+  // State for current gate script text
+  const [currentScriptText, setCurrentScriptText] = useState<string>('');
+  const [loadingScript, setLoadingScript] = useState(false);
 
   // Select gate names based on mode
   const GATE_NAMES = mode === 'disposition' ? DISPO_GATE_NAMES : ACQUISITION_GATE_NAMES;
@@ -78,8 +89,8 @@ export default function ScriptProgress({ className = '', isActive: propIsActive,
       if (!previousPassedGatesRef.current.has(gate)) {
         soundboard.playChime();
         
-        // If Gate 5 (The Clinch) completes in Goat Mode, trigger lightning
-        if (gate === 5 && isGoatModeActive) {
+        // If Gate 8 (Final Commitment) completes in Goat Mode, trigger lightning
+        if (gate === 8 && isGoatModeActive) {
           const handler = (window as any).__goatModeGate5Handler;
           if (handler) {
             handler();
@@ -109,12 +120,38 @@ export default function ScriptProgress({ className = '', isActive: propIsActive,
     return gateSimilarities.find((g) => g.gate === gateNumber)?.similarity || 0;
   };
 
+  // Fetch script text for current gate
+  useEffect(() => {
+    if (!isActive || currentGate < 1 || currentGate > 8) {
+      return;
+    }
+
+    const fetchScriptText = async () => {
+      setLoadingScript(true);
+      try {
+        const response = await fetch(`/api/script/text?gate=${currentGate}&mode=${mode}`, {
+          credentials: 'include',
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setCurrentScriptText(data.script_text || '');
+        }
+      } catch (error) {
+        console.error('Error fetching script text:', error);
+      } finally {
+        setLoadingScript(false);
+      }
+    };
+
+    fetchScriptText();
+  }, [currentGate, mode, isActive]);
+
   return (
-    <div className={`rounded-2xl p-6 border border-white/10 ${className}`} style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)' }}>
-      <div className="flex items-center justify-between mb-4">
+    <div className={`rounded-xl p-3 border border-white/10 ${className}`} style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)' }}>
+      <div className="flex items-center justify-between mb-3">
         <div>
-          <h3 className="text-lg font-semibold text-white mb-1">Script Adherence</h3>
-          <div className="text-sm text-gray-400">
+          <h3 className="text-base font-semibold text-white mb-0.5">Script Adherence</h3>
+          <div className="text-xs text-gray-400">
             Score: <span className="font-semibold" style={{ color: '#22C55E' }}>{adherenceScore}%</span>
             {isChecking && (
               <span className="ml-2 text-xs text-gray-500">Checking...</span>
@@ -122,12 +159,12 @@ export default function ScriptProgress({ className = '', isActive: propIsActive,
           </div>
         </div>
         <div className="text-xs text-gray-500">
-          Gate {currentGate}/5
+          Gate {currentGate}/8
         </div>
       </div>
 
       {/* Horizontal Progress Bar */}
-      <div className="flex gap-2 mb-4">
+      <div className="flex gap-1.5 mb-3">
         {GATE_NAMES.map((name, index) => {
           const gateNumber = index + 1;
           const status = getGateStatus(gateNumber);
@@ -147,19 +184,55 @@ export default function ScriptProgress({ className = '', isActive: propIsActive,
       </div>
 
       {/* Current Gate Info */}
-      {currentGate <= 5 && (
-        <div className="mt-4 p-3 rounded-lg border" style={{
+      {currentGate <= 8 && (
+        <div className="mt-2 p-2 rounded-lg border" style={{
           backgroundColor: 'rgba(255, 255, 255, 0.03)',
           borderColor: getGateStatus(currentGate) === 'warning' 
             ? 'rgba(239, 68, 68, 0.3)' 
             : 'rgba(234, 179, 8, 0.3)',
         }}>
-          <div className="text-xs text-gray-400 mb-1">Current Focus</div>
-          <div className="text-sm font-semibold text-white">
+          <div className="text-xs text-gray-400 mb-0.5">Current Focus</div>
+          <div className="text-xs font-semibold text-white">
             {GATE_FULL_NAMES[currentGate - 1]}
           </div>
+          
+          {/* Script Text Display */}
+          <AnimatePresence mode="wait">
+            {isScriptVisible ? (
+              <motion.div
+                key="script-text"
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.3 }}
+                className="mt-3 overflow-hidden"
+              >
+                <div className="text-xs text-gray-400 mb-1.5 font-semibold">Script:</div>
+                {loadingScript ? (
+                  <div className="text-xs text-gray-500 italic">Loading script...</div>
+                ) : currentScriptText ? (
+                  <div className="text-xs text-gray-300 leading-relaxed whitespace-pre-wrap bg-black/20 p-2 rounded border border-white/10">
+                    {currentScriptText}
+                  </div>
+                ) : (
+                  <div className="text-xs text-gray-500 italic">Script text not available</div>
+                )}
+              </motion.div>
+            ) : (
+              <motion.div
+                key="script-hidden"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="text-xs text-gray-500 italic mt-2 text-center py-2"
+              >
+                Script Hidden: Trust Your Training
+              </motion.div>
+            )}
+          </AnimatePresence>
+          
           {getGateStatus(currentGate) === 'warning' && (
-            <div className="text-xs text-red-400 mt-2 flex items-center gap-1">
+            <div className="text-xs text-red-400 mt-1.5 flex items-center gap-1">
               <span>⚠️</span>
               <span>Low adherence - Review script requirements</span>
             </div>
@@ -223,7 +296,7 @@ function GateSegment({ gateNumber, name, status, similarity, isCurrent }: GateSe
     >
       {/* Gate Number Badge */}
       <motion.div
-        className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold mb-2 border-2"
+        className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold mb-1 border-2"
         style={styles}
         animate={
           status === 'active'
@@ -256,19 +329,19 @@ function GateSegment({ gateNumber, name, status, similarity, isCurrent }: GateSe
       </motion.div>
 
       {/* Gate Name */}
-      <div className="text-xs text-center mb-1" style={{ color: styles.color }}>
+      <div className="text-[10px] text-center mb-0.5" style={{ color: styles.color }}>
         {name}
       </div>
 
       {/* Similarity Score */}
       {similarity > 0 && (
-        <div className="text-xs text-gray-500">
+        <div className="text-[10px] text-gray-500">
           {Math.round(similarity * 100)}%
         </div>
       )}
 
       {/* Progress Indicator Line */}
-      <div className="w-full h-1 mt-2 rounded-full overflow-hidden" style={{ backgroundColor: 'rgba(255, 255, 255, 0.1)' }}>
+      <div className="w-full h-0.5 mt-1 rounded-full overflow-hidden" style={{ backgroundColor: 'rgba(255, 255, 255, 0.1)' }}>
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${similarity * 100}%` }}

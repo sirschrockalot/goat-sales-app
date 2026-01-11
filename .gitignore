@@ -26,6 +26,8 @@ yarn-error.log*
 # Local env files
 .env*.local
 .env
+.env.production
+# .env.development can be committed (contains only localhost values)
 
 # Vercel
 .vercel

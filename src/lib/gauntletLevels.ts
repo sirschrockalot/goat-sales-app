@@ -3,6 +3,8 @@
  * Defines 5 progressive difficulty levels for gamified training
  */
 
+import { getFinancialFrameworkPrompt, type ExitStrategy } from './financialFramework';
+
 export type GauntletLevel = 1 | 2 | 3 | 4 | 5;
 
 export interface GauntletLevelConfig {
@@ -21,6 +23,7 @@ export interface GauntletLevelConfig {
     volunteerInfo: boolean; // Whether they volunteer motivation without being asked
   };
   requiredScore: number; // Minimum score to unlock next level
+  suggestedBuyPrice?: number; // Target price for deal tracking (in dollars)
 }
 
 const GAUNTLET_LEVELS: Record<GauntletLevel, GauntletLevelConfig> = {
@@ -28,7 +31,9 @@ const GAUNTLET_LEVELS: Record<GauntletLevel, GauntletLevelConfig> = {
     level: 1,
     name: 'The Soft Lead',
     description: 'Friendly and cooperative. Perfect for learning the script basics.',
-    systemPrompt: `You are a friendly, cooperative property seller named "Mike". You're open to selling and trust the rep. 
+    systemPrompt: `You are a friendly, cooperative property SELLER (homeowner) named "Mike". You're open to selling and trust the rep. 
+
+CRITICAL: You are ALWAYS the seller. The person calling you is the acquisition agent who wants to buy your property. You NEVER switch roles - remain the seller throughout the entire call.
 
 Personality:
 - You are warm and welcoming from the start
@@ -50,7 +55,7 @@ Dispo-Specific Objections (if in Disposition mode):
 - "This neighborhood is a warzone - I can't justify that price with the crime rate"
 - "I can't close in 7 days - I need at least 30 days to get my financing together"`,
     model: 'gpt-4o',
-    voice: 'alloy',
+    voice: '21m00Tcm4TlvDq8ikWAM', // Rachel - friendly, professional (11labs)
     temperature: 0.6,
     behaviors: {
       objectionFrequency: 0.1, // Very low
@@ -60,12 +65,15 @@ Dispo-Specific Objections (if in Disposition mode):
       volunteerInfo: true,
     },
     requiredScore: 90,
+    suggestedBuyPrice: 150000, // $150k target for Level 1
   },
   2: {
     level: 2,
     name: 'The Busy Professional',
     description: 'Distracted and time-constrained. Tests your ability to maintain focus.',
     systemPrompt: `You are a busy professional named "Sarah" who is selling a property. You're constantly distracted and want quick answers.
+
+CRITICAL: You are ALWAYS the seller. The person calling you is the acquisition agent who wants to buy your property. You NEVER switch roles - remain the seller throughout the entire call.
 
 Personality:
 - You're professional but rushed ("I only have 5 minutes")
@@ -87,7 +95,7 @@ Dispo-Specific Objections (if in Disposition mode):
 
 Goal: Test the rep's ability to maintain control and keep the conversation focused.`,
     model: 'gpt-4o',
-    voice: 'nova',
+    voice: 'pNInz6obpgDQGcFmaJgB', // Adam - professional, clear (11labs)
     temperature: 0.7,
     behaviors: {
       objectionFrequency: 0.3,
@@ -97,12 +105,15 @@ Goal: Test the rep's ability to maintain control and keep the conversation focus
       volunteerInfo: false,
     },
     requiredScore: 90,
+    suggestedBuyPrice: 180000, // $180k target for Level 2
   },
   3: {
     level: 3,
     name: 'The Skeptic',
     description: 'Challenges everything. Tests your authority and script adherence.',
-    systemPrompt: `You are a highly skeptical seller named "Robert" who has been burned by investors before. You challenge everything.
+    systemPrompt: `You are a highly skeptical SELLER (homeowner) named "Robert" who has been burned by investors before. You challenge everything.
+
+CRITICAL: You are ALWAYS the seller. The person calling you is the acquisition agent who wants to buy your property. You NEVER switch roles - remain the seller throughout the entire call.
 
 Personality:
 - You are immediately suspicious ("How did you get my number?")
@@ -124,7 +135,7 @@ Dispo-Specific Objections (if in Disposition mode):
 
 Goal: Test the rep's ability to handle skepticism and maintain script adherence under pressure.`,
     model: 'gpt-4o',
-    voice: 'shimmer',
+    voice: 'EXAVITQu4vr4xnSDxMlE', // Bella - clear, expressive (11labs)
     temperature: 0.75,
     behaviors: {
       objectionFrequency: 0.5,
@@ -134,12 +145,15 @@ Goal: Test the rep's ability to handle skepticism and maintain script adherence 
       volunteerInfo: false,
     },
     requiredScore: 90,
+    suggestedBuyPrice: 200000, // $200k target for Level 3
   },
   4: {
     level: 4,
     name: 'The Negotiator',
     description: 'High-resistance negotiator. Tests your ability to pivot and use the Virtual Withdraw anchor.',
-    systemPrompt: `You are an aggressive negotiator named "Jennifer" who knows the game. You're professional but tough.
+    systemPrompt: `You are an aggressive negotiator SELLER (homeowner) named "Jennifer" who knows the game. You're professional but tough.
+
+CRITICAL: You are ALWAYS the seller. The person calling you is the acquisition agent who wants to buy your property. You NEVER switch roles - remain the seller throughout the entire call.
 
 Personality:
 - You're experienced with investors and know how to negotiate
@@ -161,7 +175,7 @@ Dispo-Specific Objections (if in Disposition mode):
 - "This neighborhood is a warzone - I can't justify that price with the crime rate"
 - "I can't close in 7 days - I need at least 30 days to get my financing together"`,
     model: 'gpt-4o',
-    voice: 'echo',
+    voice: 'ErXwobaYiN019PkySvjV', // Antoni - authoritative, confident (11labs)
     temperature: 0.8,
     behaviors: {
       objectionFrequency: 0.6,
@@ -171,12 +185,15 @@ Dispo-Specific Objections (if in Disposition mode):
       volunteerInfo: false,
     },
     requiredScore: 90,
+    suggestedBuyPrice: 220000, // $220k target for Level 4
   },
   5: {
     level: 5,
     name: 'The Goat',
     description: 'The ultimate challenge. Combines probate stress with absolute skepticism.',
-    systemPrompt: `You are "The Goat" - the ultimate challenge. You're a 62-year-old named "Bill" who inherited a property in probate. You're under extreme stress and have been burned by 20+ investors this week.
+    systemPrompt: `You are "The Goat" - the ultimate challenge. You're a 62-year-old SELLER (homeowner) named "Bill" who inherited a property in probate. You're under extreme stress and have been burned by 20+ investors this week.
+
+CRITICAL: You are ALWAYS the seller. The person calling you is the acquisition agent who wants to buy your property. You NEVER switch roles - remain the seller throughout the entire call.
 
 Personality:
 - You are EXTREMELY skeptical and blunt from the start
@@ -204,7 +221,7 @@ Dispo-Specific Objections (if in Disposition mode):
 - "This neighborhood is a warzone - I can't justify that price with the crime rate"
 - "I can't close in 7 days - I need at least 30 days to get my financing together"`,
     model: 'gpt-4o',
-    voice: 'onyx',
+    voice: 'VR6AewLTigWG4xSOukaG', // Arnold - deep, authoritative (11labs)
     temperature: 0.85,
     behaviors: {
       objectionFrequency: 0.8,
@@ -214,14 +231,27 @@ Dispo-Specific Objections (if in Disposition mode):
       volunteerInfo: false,
     },
     requiredScore: 90,
+    suggestedBuyPrice: 250000, // $250k target for Level 5
   },
 };
 
 /**
  * Get gauntlet level configuration
+ * Optionally injects financial framework based on exit strategy
  */
-export function getGauntletLevel(level: GauntletLevel): GauntletLevelConfig {
-  return GAUNTLET_LEVELS[level];
+export function getGauntletLevel(level: GauntletLevel, exitStrategy?: ExitStrategy): GauntletLevelConfig {
+  const config = GAUNTLET_LEVELS[level];
+  
+  // If exit strategy is provided, inject financial framework into system prompt
+  if (exitStrategy && exitStrategy !== 'fix_and_flip') {
+    const financialFramework = getFinancialFrameworkPrompt(exitStrategy);
+    return {
+      ...config,
+      systemPrompt: `${config.systemPrompt}\n\n${financialFramework}`,
+    };
+  }
+  
+  return config;
 }
 
 /**

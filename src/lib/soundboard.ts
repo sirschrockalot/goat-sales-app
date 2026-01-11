@@ -138,6 +138,66 @@ class Soundboard {
       }
     }
   }
+
+  /**
+   * Play mechanical click sound for script visibility toggle
+   */
+  playMechanicalClick() {
+    if (typeof window === 'undefined' || !this.audioContext) return;
+    
+    try {
+      // Create a sharp mechanical click sound
+      const oscillator = this.audioContext.createOscillator();
+      const gainNode = this.audioContext.createGain();
+      const filter = this.audioContext.createBiquadFilter();
+
+      oscillator.connect(filter);
+      filter.connect(gainNode);
+      gainNode.connect(this.audioContext.destination);
+
+      // Sharp click: high frequency, quick attack/decay
+      oscillator.frequency.value = 2000;
+      oscillator.type = 'square';
+
+      // Filter for mechanical sound
+      filter.type = 'highpass';
+      filter.frequency.value = 1000;
+
+      // Quick attack and decay
+      gainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
+      gainNode.gain.linearRampToValueAtTime(0.4, this.audioContext.currentTime + 0.001);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.05);
+
+      oscillator.start(this.audioContext.currentTime);
+      oscillator.stop(this.audioContext.currentTime + 0.05);
+    } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error playing mechanical click:', error);
+      }
+    }
+  }
+
+  /**
+   * Play a sound by name
+   */
+  play(soundName: string) {
+    switch (soundName) {
+      case 'chime':
+        this.playChime();
+        break;
+      case 'horn':
+        this.playHorn();
+        break;
+      case 'bleat':
+        this.playBleat();
+        break;
+      case 'mechanicalClick':
+        this.playMechanicalClick();
+        break;
+      default:
+        console.warn(`Unknown sound: ${soundName}`);
+    }
+  }
 }
 
 // Singleton instance

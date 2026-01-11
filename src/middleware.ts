@@ -7,8 +7,8 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -45,6 +45,17 @@ export async function middleware(request: NextRequest) {
   // Protect admin routes and admin API routes with session and is_admin check
   if (pathname.startsWith('/admin') || pathname.startsWith('/api/admin')) {
     try {
+      if (!supabaseUrl || !supabaseAnonKey) {
+        console.error('Supabase environment variables not configured');
+        if (pathname.startsWith('/api/')) {
+          return NextResponse.json(
+            { error: 'Server configuration error' },
+            { status: 500 }
+          );
+        }
+        return NextResponse.redirect(new URL('/login', request.url));
+      }
+
       // Get auth token from cookies
       const accessToken = request.cookies.get('sb-access-token')?.value ||
                          request.cookies.get('supabase-auth-token')?.value ||
@@ -116,6 +127,11 @@ export async function middleware(request: NextRequest) {
   // Protect gauntlet route (requires authentication)
   if (pathname.startsWith('/gauntlet')) {
     try {
+      if (!supabaseUrl || !supabaseAnonKey) {
+        console.error('Supabase environment variables not configured');
+        return NextResponse.redirect(new URL('/login', request.url));
+      }
+
       const accessToken = request.cookies.get('sb-access-token')?.value ||
                          request.cookies.get('supabase-auth-token')?.value ||
                          request.headers.get('authorization')?.replace('Bearer ', '');

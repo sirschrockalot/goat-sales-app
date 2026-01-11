@@ -8,6 +8,7 @@ import { supabaseAdmin, createSupabaseClient } from '@/lib/supabase';
 
 const BASE_XP_PER_SECOND = 1; // Base XP per second of call
 const GOAT_MODE_MULTIPLIER = 2; // 2x XP during Goat Mode
+const PRO_MODE_MULTIPLIER = 1.5; // 1.5x XP for time spent in Pro Mode (script hidden)
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,7 +26,7 @@ export async function POST(request: NextRequest) {
     const userId = user.id;
 
     const body = await request.json();
-    const { callDuration, goatModeDuration, goatScore } = body;
+    const { callDuration, goatModeDuration, goatScore, scriptHiddenDuration = 0 } = body;
 
     if (!callDuration) {
       return NextResponse.json(
@@ -37,9 +38,10 @@ export async function POST(request: NextRequest) {
     // Calculate XP
     const baseXP = Math.floor(callDuration * BASE_XP_PER_SECOND);
     const goatModeXP = Math.floor(goatModeDuration * BASE_XP_PER_SECOND * GOAT_MODE_MULTIPLIER);
+    const proModeXP = Math.floor(scriptHiddenDuration * BASE_XP_PER_SECOND * PRO_MODE_MULTIPLIER);
     const bonusXP = goatScore >= 90 ? Math.floor(goatScore - 90) : 0; // Bonus for high scores
     
-    const totalXP = baseXP + goatModeXP + bonusXP;
+    const totalXP = baseXP + goatModeXP + proModeXP + bonusXP;
 
     // Get current profile
     const { data: profile, error: profileError } = await supabaseAdmin
@@ -78,6 +80,7 @@ export async function POST(request: NextRequest) {
       breakdown: {
         baseXP,
         goatModeXP,
+        proModeXP,
         bonusXP,
       },
       newTotalXP: (profile.experience_points || 0) + totalXP,

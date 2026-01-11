@@ -1,23 +1,76 @@
+-- Enable pgvector extension for vector similarity search (if not already enabled)
+CREATE EXTENSION IF NOT EXISTS vector;
+
 -- Create dispo_script_segments table for Dispositions training
-CREATE TABLE IF NOT EXISTS dispo_script_segments (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  gate_number INTEGER NOT NULL CHECK (gate_number BETWEEN 1 AND 5),
-  gate_name TEXT NOT NULL,
-  script_text TEXT NOT NULL,
-  objective TEXT,
-  success_criteria JSONB,
-  embedding VECTOR(1536), -- OpenAI text-embedding-3-small dimension
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
+-- Handle vector type conditionally
+DO $$ 
+DECLARE
+  vector_type_exists BOOLEAN;
+BEGIN
+  -- Check if vector type exists
+  SELECT EXISTS (
+    SELECT 1 FROM pg_type t
+    JOIN pg_namespace n ON t.typnamespace = n.oid
+    WHERE t.typname = 'vector' AND n.nspname = 'public'
+  ) INTO vector_type_exists;
+  
+  -- Create table without vector column first
+  CREATE TABLE IF NOT EXISTS dispo_script_segments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    gate_number INTEGER NOT NULL CHECK (gate_number BETWEEN 1 AND 5),
+    gate_name TEXT NOT NULL,
+    script_text TEXT NOT NULL,
+    objective TEXT,
+    success_criteria JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+  );
+  
+  -- Add embedding column if vector type exists
+  IF vector_type_exists THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns 
+      WHERE table_name = 'dispo_script_segments' AND column_name = 'embedding'
+    ) THEN
+      EXECUTE 'ALTER TABLE dispo_script_segments ADD COLUMN embedding public.vector(1536)';
+    END IF;
+  ELSE
+    RAISE NOTICE 'vector type not found. Creating table without embedding column.';
+  END IF;
+END $$;
 
 -- Create index on gate_number for fast lookups
 CREATE INDEX IF NOT EXISTS idx_dispo_script_gate_number ON dispo_script_segments(gate_number);
 
--- Create index on embedding for vector similarity search
-CREATE INDEX IF NOT EXISTS idx_dispo_script_embedding ON dispo_script_segments 
-USING ivfflat (embedding vector_cosine_ops)
-WITH (lists = 100);
+-- Create index on embedding for vector similarity search (only if column exists)
+DO $$ 
+BEGIN
+  -- Check if embedding column exists
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'dispo_script_segments' AND column_name = 'embedding'
+  ) THEN
+    -- Try to create the index, but don't fail if operator class doesn't exist
+    BEGIN
+      CREATE INDEX IF NOT EXISTS idx_dispo_script_embedding ON dispo_script_segments 
+      USING ivfflat (embedding vector_cosine_ops)
+      WITH (lists = 100);
+    EXCEPTION
+      WHEN undefined_object THEN
+        -- Operator class doesn't exist, try without specifying it
+        BEGIN
+          CREATE INDEX IF NOT EXISTS idx_dispo_script_embedding ON dispo_script_segments 
+          USING ivfflat (embedding)
+          WITH (lists = 100);
+        EXCEPTION
+          WHEN OTHERS THEN
+            RAISE NOTICE 'Could not create vector index: %', SQLERRM;
+        END;
+    END;
+  ELSE
+    RAISE NOTICE 'embedding column does not exist. Skipping vector index creation.';
+  END IF;
+END $$;
 
 -- Enable Row Level Security
 ALTER TABLE dispo_script_segments ENABLE ROW LEVEL SECURITY;
@@ -51,4 +104,14 @@ ON CONFLICT DO NOTHING;
 
 -- Add comment
 COMMENT ON TABLE dispo_script_segments IS 'Dispositions script segments for training reps on selling to investors';
-COMMENT ON COLUMN dispo_script_segments.embedding IS 'Vector embedding for semantic similarity matching';
+
+-- Add comment on embedding column only if it exists
+DO $$ 
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'dispo_script_segments' AND column_name = 'embedding'
+  ) THEN
+    EXECUTE 'COMMENT ON COLUMN dispo_script_segments.embedding IS ''Vector embedding for semantic similarity matching''';
+  END IF;
+END $$;

@@ -94,7 +94,7 @@ export default function LiveHUD({
       <div className={`mb-4 p-3 rounded-lg text-center font-bold ${getGateStatusColor()}`}>
         <div className="text-sm">{getGateStatusText()}</div>
         <div className="text-xs mt-1 opacity-90">
-          {gateStatus === 'pending' && 'Complete all 5 steps to trigger gate'}
+          {gateStatus === 'pending' && 'Complete all 8 steps to trigger gate'}
         </div>
       </div>
 

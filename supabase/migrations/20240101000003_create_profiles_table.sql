@@ -9,8 +9,27 @@ CREATE TABLE IF NOT EXISTS profiles (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Create index on role for admin queries
-CREATE INDEX IF NOT EXISTS idx_profiles_role ON profiles(role);
+-- Add role column if it doesn't exist (for existing tables)
+DO $$ 
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'profiles' AND column_name = 'role'
+  ) THEN
+    ALTER TABLE profiles ADD COLUMN role TEXT CHECK (role IN ('user', 'admin', 'manager')) DEFAULT 'user';
+  END IF;
+END $$;
+
+-- Create index on role for admin queries (only if column exists)
+DO $$ 
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'profiles' AND column_name = 'role'
+  ) THEN
+    CREATE INDEX IF NOT EXISTS idx_profiles_role ON profiles(role);
+  END IF;
+END $$;
 
 -- Enable Row Level Security
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;

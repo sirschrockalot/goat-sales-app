@@ -7,15 +7,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { generatePersona, type DifficultyLevel } from '@/lib/generatePersona';
 import { getGauntletLevel } from '@/lib/gauntletLevels';
 import { getDispoGauntletLevel } from '@/lib/dispoGauntletLevels';
-import { createSupabaseClient } from '@/lib/supabase';
+import { getUserFromRequest } from '@/lib/getUserFromRequest';
 import type { PersonaMode } from '@/lib/vapi-client';
 import type { GauntletLevel } from '@/lib/gauntletLevels';
+import { getAmbientNoiseConfig, calculateResponseDelay } from '@/lib/vapiConfig';
 
 export async function POST(request: NextRequest) {
   try {
-    // Get authenticated user
-    const supabase = createSupabaseClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    // Get authenticated user from request
+    const { user, error: authError } = await getUserFromRequest(request);
 
     if (authError || !user) {
       return NextResponse.json(
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     const userId = user.id;
 
     const body = await request.json();
-    const { difficulty, personaMode, voiceHintsEnabled, gauntletLevel } = body;
+    const { difficulty, personaMode, voiceHintsEnabled, gauntletLevel, roleReversal, exitStrategy, propertyLocation } = body;
 
     if (!personaMode) {
       return NextResponse.json(
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
           behaviors: dispoLevel.behaviors,
         };
       } else {
-        const acqLevel = getGauntletLevel(validGauntletLevel);
+        const acqLevel = getGauntletLevel(validGauntletLevel, exitStrategy);
         persona = {
           systemPrompt: acqLevel.systemPrompt,
           model: acqLevel.model,
@@ -93,7 +93,29 @@ export async function POST(request: NextRequest) {
         );
       }
       const validDifficulty = Math.max(1, Math.min(10, parseInt(difficulty))) as DifficultyLevel;
-      persona = generatePersona(validDifficulty, validPersonaMode);
+      const isRoleReversal = roleReversal === true || roleReversal === 'true';
+      persona = generatePersona(validDifficulty, validPersonaMode, isRoleReversal, propertyLocation, exitStrategy);
+    }
+
+    // Check if we should use a pre-created assistant ID for acquisitions gauntlet
+    if (gauntletLevel && validPersonaMode === 'acquisition') {
+      const acquisitionsAssistantId = process.env.ACQUISITIONS_ASSISTANT_ID;
+      
+      if (acquisitionsAssistantId) {
+        // Use the pre-created "Hard-to-Get" Acquisitions Assistant
+        // Return the assistant ID without creating a new one
+        return NextResponse.json({
+          success: true,
+          assistantId: acquisitionsAssistantId,
+          controlUrl: undefined, // Control URL is managed by Vapi for pre-created assistants
+          persona: {
+            gauntletLevel,
+            personaMode: validPersonaMode,
+            model: persona.model,
+            voice: persona.voice,
+          },
+        });
+      }
     }
 
     // Create assistant name
@@ -130,6 +152,46 @@ export async function POST(request: NextRequest) {
         },
         firstMessage: persona.firstMessage || 'Hello, how can I help you today?',
         maxDurationSeconds: persona.maxDuration || 600,
+        // Enable fillers and backchanneling for more human-like conversation
+        fillersEnabled: true,
+        backchannelingEnabled: true,
+        backchannelingPhrases: [
+          'Yeah',
+          'Mhm',
+          'I see',
+          'Right',
+          'Got it',
+          'Interesting',
+          'Uh-huh',
+          'Sure',
+          'I understand',
+          'That makes sense',
+        ],
+        // Advanced interruption logic for human-like conversation
+        interruptionThreshold: 50, // 50ms - makes AI "feel" user's voice instantly
+        // Barge-in protection: if AI is mid-sentence about something important (like an objection),
+        // wait for 200ms of sustained speech before stopping (allows for natural overlaps)
+        bargeInProtection: {
+          enabled: true,
+          sustainedSpeechThreshold: 200, // 200ms of sustained speech before interrupting important points
+        },
+        // Humanized endpointing - prevents AI from "jumping the gun" on tiny pauses
+        // Note: Dynamic timeout based on sentiment is handled via system prompt logic
+        // The AI will naturally pause longer (1500ms) when processing heavy/negative sentiment
+        endOfTurnDetectionTimeout: 700, // 700ms default - AI will extend to 1500ms for heavy sentiment
+        silenceTimeout: 400, // 400ms - detects pauses for backchanneling
+        // Dynamic response delay based on sentiment (handled via system prompt)
+        // Heavy sentiment = 1500ms, Transactional = 400ms, Default = 700ms
+        // Note: Vapi may not support replyDelay directly, but the AI is instructed to pause accordingly
+        replyDelay: 700, // Default delay - AI will adjust based on sentiment (400ms-1500ms)
+        // Background ambience - "Quiet Office" room tone at 2% volume (removes "digital silence")
+        // Note: Vapi may not support ambientNoise directly, but we configure it if available
+        ...(getAmbientNoiseConfig().enabled && {
+          ambientNoise: {
+            type: getAmbientNoiseConfig().type, // 'quiet_office'
+            volume: getAmbientNoiseConfig().volume, // 0.02 (2%)
+          },
+        }),
         // Enable control API for voice hints
         serverUrl: process.env.NEXT_PUBLIC_APP_URL
           ? `${process.env.NEXT_PUBLIC_APP_URL}/api/vapi-webhook`
@@ -141,6 +203,8 @@ export async function POST(request: NextRequest) {
           personaMode: validPersonaMode,
           voiceHintsEnabled: voiceHintsEnabled || false,
           behaviors: persona.behaviors,
+          ...(exitStrategy && { exitStrategy }),
+          ...(propertyLocation && { propertyLocation }),
         },
       }),
     });
