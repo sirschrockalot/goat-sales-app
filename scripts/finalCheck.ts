@@ -15,7 +15,7 @@
  * - Go/No-Go Readiness Score
  */
 
-import * as fs from 'fs-extra';
+import fs from 'fs-extra';
 import * as path from 'path';
 import OpenAI from 'openai';
 import chalk from 'chalk';
@@ -399,15 +399,13 @@ export async function runFinalCheck(): Promise<void> {
   }
 }
 
-// CLI interface
-if (require.main === module) {
-  runFinalCheck()
-    .then(() => {
-      console.log('\n✅ Audit complete!');
-      process.exit(0);
-    })
-    .catch((error) => {
-      console.error('\n❌ Error:', error);
-      process.exit(1);
-    });
-}
+// CLI interface - always run when executed directly
+runFinalCheck()
+  .then(() => {
+    console.log('\n✅ Audit complete!');
+    process.exit(0);
+  })
+  .catch((error) => {
+    console.error('\n❌ Error:', error);
+    process.exit(1);
+  });

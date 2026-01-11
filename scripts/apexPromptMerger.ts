@@ -11,7 +11,7 @@
  * - Logs before/after comparison
  */
 
-import * as fs from 'fs-extra';
+import fs from 'fs-extra';
 import * as path from 'path';
 import OpenAI from 'openai';
 
@@ -550,12 +550,11 @@ export async function mergeApexPromptAndUpdate(assistantId: string): Promise<voi
   }
 }
 
-// CLI interface
-if (require.main === module) {
-  const args = process.argv.slice(2);
+// CLI interface - always run when executed directly
+const args = process.argv.slice(2);
 
-  if (args.length === 0 || !args[0]) {
-    console.log(`
+if (args.length === 0 || !args[0]) {
+  console.log(`
 Apex Prompt Merger - Elite Sales Architect
 
 Usage:
@@ -572,18 +571,17 @@ Files Required:
   - base_prompt.txt (in project root)
   - raw_dna/summaries/*_summary.json (from dna:batch)
     `);
-    process.exit(0);
-  }
-
-  const assistantId = args[0];
-
-  mergeApexPromptAndUpdate(assistantId)
-    .then(() => {
-      console.log('\n✅ Success!');
-      process.exit(0);
-    })
-    .catch(error => {
-      console.error('\n❌ Error:', error);
-      process.exit(1);
-    });
+  process.exit(0);
 }
+
+const assistantId = args[0];
+
+mergeApexPromptAndUpdate(assistantId)
+  .then(() => {
+    console.log('\n✅ Success!');
+    process.exit(0);
+  })
+  .catch(error => {
+    console.error('\n❌ Error:', error);
+    process.exit(1);
+  });

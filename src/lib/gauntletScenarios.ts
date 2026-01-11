@@ -4,6 +4,8 @@
  * Creates "Apex Level" challenges for top reps
  */
 
+import { getBattleTestPrompt } from './battleTestMode';
+
 export type ApexLevel = 'standard' | 'apex' | 'battle-test';
 
 export interface ApexScenarioConfig {
@@ -245,7 +247,6 @@ export function getApexScenarioPrompt(apexLevel: ApexLevel = 'standard', propert
   
   // Import Battle-Test Mode if enabled
   if (apexLevel === 'battle-test') {
-    const { getBattleTestPrompt } = require('./battleTestMode');
     return getBattleTestPrompt(propertyLocation);
   }
   

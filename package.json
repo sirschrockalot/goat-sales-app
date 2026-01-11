@@ -24,6 +24,7 @@
     "prompt:merge": "tsx scripts/promptMerger.ts",
     "apex:merge": "tsx scripts/apexPromptMerger.ts",
     "portal:scrape": "tsx scripts/privatePortalScraper.ts",
+    "portal:scrape:url": "tsx scripts/privatePortalScraper.ts",
     "videos:transcribe": "tsx scripts/privateVideoTranscriber.ts",
     "videos:process": "tsx scripts/privateVideoProcessor.ts",
     "scrape-dna": "tsx scripts/batchDnaScraper.ts",
@@ -31,6 +32,7 @@
     "transcribe-private": "tsx scripts/privateVideoProcessor.ts",
     "merge-prompts": "tsx scripts/apexPromptMerger.ts",
     "final-check": "tsx scripts/finalCheck.ts",
+    "test:ai-services": "tsx scripts/test-ai-services.ts",
     "archive:calls": "tsx scripts/archive-calls.ts",
     "audit:knowledge": "tsx scripts/knowledgeAudit.ts",
     "audit:knowledge:protect": "tsx scripts/knowledgeAudit.ts --auto-protect"

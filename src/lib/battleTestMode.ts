@@ -3,6 +3,8 @@
  * High-intensity real-time role-play with conviction monitoring, energy mirroring, and deadly closes
  */
 
+import { getCounterCompChallenge, getMockMLSComps } from './neuralCoaching';
+
 export type BattleTestLevel = 'standard' | 'apex' | 'battle-test';
 
 export interface BattleTestConfig {
@@ -197,7 +199,6 @@ export function getFinancialMasteryChallenge(propertyLocation?: string, subjectP
     : ` You have access to local market data. Use this to challenge the rep's numbers.`;
 
   // Get counter-comp challenge
-  const { getCounterCompChallenge, getMockMLSComps } = require('./neuralCoaching');
   const counterCompChallenge = getCounterCompChallenge(propertyLocation, subjectPrice);
   const comps = getMockMLSComps(propertyLocation, subjectPrice);
   const bestComp = comps[0];

@@ -9,10 +9,11 @@
  * - Merged transcript output with PRIORITY: 10
  */
 
-import * as fs from 'fs-extra';
+import fs from 'fs-extra';
 import * as path from 'path';
 import OpenAI from 'openai';
 import ffmpeg from 'fluent-ffmpeg';
+import ffmpegStatic from 'ffmpeg-static';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -25,6 +26,11 @@ const TEMP_DIR = path.join(process.cwd(), 'temp', 'video_processing');
 const SUPPORTED_FORMATS = ['.mp4', '.mov', '.m4v', '.avi', '.mkv', '.webm'];
 const CHUNK_SIZE_MB = 25; // Chunk if audio > 25MB
 const CHUNK_DURATION_MINUTES = 10; // 10-minute chunks
+
+// Configure ffmpeg to use static binary
+if (ffmpegStatic) {
+  ffmpeg.setFfmpegPath(ffmpegStatic);
+}
 
 /**
  * Check if file is a supported video format
@@ -90,18 +96,28 @@ async function getAudioDuration(audioPath: string): Promise<number> {
  * Chunk audio into 10-minute segments
  */
 async function chunkAudio(audioPath: string): Promise<string[]> {
-  const duration = await getAudioDuration(audioPath);
   const fileSizeMB = await getFileSizeMB(audioPath);
 
-  console.log(`📊 Audio stats: ${duration.toFixed(0)}s (${fileSizeMB.toFixed(2)}MB)`);
+  console.log(`📊 Audio size: ${fileSizeMB.toFixed(2)}MB`);
 
-  // Check if chunking is needed
+  // Check if chunking is needed based on file size only
   if (fileSizeMB <= CHUNK_SIZE_MB) {
     console.log(`✅ Audio is ${fileSizeMB.toFixed(2)}MB (under ${CHUNK_SIZE_MB}MB limit) - no chunking needed`);
     return [audioPath];
   }
 
+  // For large files, we need duration to chunk - try to get it, but if ffprobe fails, estimate
+  let duration: number;
+  try {
+    duration = await getAudioDuration(audioPath);
+  } catch (error) {
+    // Estimate duration based on file size (rough estimate: 1MB ≈ 2 minutes at 64kbps mono)
+    duration = (fileSizeMB / 1) * 120; // Rough estimate
+    console.warn(`⚠️  Could not get audio duration, estimating ${duration.toFixed(0)}s based on file size`);
+  }
+
   console.log(`✂️  Chunking audio into ${CHUNK_DURATION_MINUTES}-minute segments...`);
+  console.log(`📊 Audio duration: ${duration.toFixed(0)}s`);
 
   const chunkDuration = CHUNK_DURATION_MINUTES * 60; // Convert to seconds
   const numChunks = Math.ceil(duration / chunkDuration);
@@ -334,15 +350,13 @@ export async function processPrivateVideos(): Promise<void> {
   }
 }
 
-// CLI interface
-if (require.main === module) {
-  processPrivateVideos()
-    .then(() => {
-      console.log('\n✅ Success!');
-      process.exit(0);
-    })
-    .catch(error => {
-      console.error('\n❌ Error:', error);
-      process.exit(1);
-    });
-}
+// CLI interface - always run when executed directly
+processPrivateVideos()
+  .then(() => {
+    console.log('\n✅ Success!');
+    process.exit(0);
+  })
+  .catch(error => {
+    console.error('\n❌ Error:', error);
+    process.exit(1);
+  });
