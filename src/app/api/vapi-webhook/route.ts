@@ -415,6 +415,10 @@ export async function POST(request: NextRequest) {
               exitStrategy: exitStrategy,
               // Store negotiation precision scores
               negotiationPrecision: gradingResult.negotiationPrecision || null,
+              // Store hold data for validation
+              holdDuration: call.metadata?.holdDuration || 0,
+              holdCount: call.metadata?.holdCount || 0,
+              priceChangesWithoutHold: gradingResult.advocacy?.holdUtilization?.priceChangesWithoutHold || 0,
             },
             ended_at: new Date().toISOString(),
           })

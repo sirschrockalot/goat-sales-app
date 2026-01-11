@@ -76,6 +76,38 @@ interface GradingResult {
       ratio: number; // Percentage
       feedback: string;
     };
+    holdUtilization: {
+      score: number; // 0-10
+      usedHoldBeforePriceChange: boolean;
+      priceChangesWithoutHold: number;
+      holdTiming: number; // Average hold duration in seconds
+      feedback: string;
+    };
+    intelligenceUtilization: {
+      score: number; // 0-10
+      subtlePivot: boolean;
+      trustBreach: boolean; // Did rep admit to listening?
+      intelligenceIntegrated: boolean;
+      feedback: string;
+    };
+    clause17Handling: {
+      legalClarity: {
+        score: number; // 0-10
+        explainedAsReservationSign: boolean;
+        clarifiedNotALien: boolean;
+        explainedMutualProtection: boolean;
+        explainedPreventsSnaking: boolean;
+        feedback: string;
+      };
+      emotionalRegulation: {
+        score: number; // 0-10
+        stayedCalm: boolean;
+        acknowledgedConcern: boolean;
+        maintainedWarmTone: boolean;
+        usedHoldStrategy: boolean;
+        feedback: string;
+      };
+    };
   };
   logicGates: {
     intro: 'pass' | 'fail';
@@ -179,6 +211,69 @@ Analyze the END of the transcript to determine:
    - Calculate ratio: (Team phrases / Total phrases) × 100
    - Score 0-10: 10 = Perfect (80%+ team language), 5 = Partial (50-79% team language), 0 = Failed (<50% team language)
 
+**UNDERWRITING HOLD VALIDATION - The "No Live Negotiation" Rule:**
+STRICT RULE: The rep MUST place the seller on hold before changing the price. Live price negotiation is FORBIDDEN.
+
+1. **Hold Utilization Score:** Did the rep use the "Bad Cop" (Underwriters) effectively?
+   - Did they place the seller on hold before presenting a new price?
+   - Did they mention "underwriters", "office", "the money guys", or similar before changing price?
+   - Did they return from hold with a new price and blame it on underwriters?
+   - Score 0-10: 10 = Perfect (always used hold before price changes), 5 = Partial (used hold sometimes), 0 = Failed (never used hold, negotiated live)
+
+2. **Logic Break Detection:** If the rep changes the price WITHOUT placing on hold first, this is a CRITICAL LOGIC BREAK:
+   - Look for price changes in the transcript (e.g., "$150k" then later "$155k" or "$145k")
+   - Check if there was a hold mention BEFORE the price change
+   - If price changed without hold: This is a FAILURE and must be penalized heavily
+   - Penalty: -15 points to goatScore for each price change without hold
+   - Flag in feedback: "CRITICAL: You changed the price without placing on hold. This violates the 'No Live Negotiation' rule."
+
+3. **Hold Timing:** Did the rep keep the hold to a reasonable duration (15-40 seconds)?
+   - If hold was too short (<10 seconds): Seller might not believe it was real
+   - If hold was too long (>60 seconds): Seller becomes impatient (this is actually good for testing rapport)
+   - Score 0-10: 10 = Perfect (20-40 seconds), 5 = Partial (10-20 or 40-60 seconds), 0 = Failed (<10 or >60 seconds)
+
+**HOT MIC EAVESDROPPING - Intelligence Utilization:**
+1. **The Subtle Pivot:** Did the rep use the "overheard" private dialogue to adjust their strategy WITHOUT admitting they were listening?
+   - Look for the seller's private dialogue patterns:
+     * "The Spouse": Mentions of needing cash, moving, family urgency
+     * "The Debt": Mentions of foreclosure, bank deadlines, payment due dates
+     * "The Anchor": Mentions of a lower acceptable price than initially stated
+   - Did the rep adjust their offer based on this information?
+   - Did they use the information subtly (e.g., "I understand you need to close by the 15th" without saying "I heard you talking")?
+   - Score 0-10: 10 = Perfect (used info subtly, adjusted offer, never admitted listening), 5 = Partial (used info but was too obvious), 0 = Failed (didn't use info or admitted listening)
+
+2. **Trust Breach Penalty:** If the rep admits to listening to the private dialogue, this is a CRITICAL TRUST BREACH:
+   - Look for phrases like: "I heard you talking", "I overheard", "I was listening", "I caught that"
+   - If detected: This is a MAJOR FAILURE - the seller will feel violated and lose trust
+   - Penalty: -20 points to goatScore for admitting to eavesdropping
+   - Flag in feedback: "CRITICAL TRUST BREACH: You admitted to listening to a private conversation. This destroys rapport and violates trust. Never reveal that you heard private dialogue."
+
+3. **Intelligence Integration:** How well did the rep integrate the secret insight into their negotiation?
+   - Did they reference the urgency (debt deadline) without saying they heard it?
+   - Did they adjust their offer to match the "anchor" price mentioned privately?
+   - Did they acknowledge family needs (spouse) without revealing they overheard?
+   - Score 0-10: 10 = Perfect (seamlessly integrated, natural flow), 5 = Partial (integrated but awkward), 0 = Failed (ignored the insight or used it clumsily)
+
+**CONTRACT WALK-THROUGH - CLAUSE 17 OBJECTION HANDLING:**
+1. **Legal Clarity:** Did the rep accurately explain Clause 17 (Memorandum of Contract)?
+   - Did they explain it as a "Reservation Sign" or "notice to the county"?
+   - Did they clarify it's NOT a lien, but a notice of agreement?
+   - Did they explain it protects the seller by preventing other buyers from "snaking" the deal?
+   - Did they mention it's mutual protection during escrow?
+   - Score 0-10: 10 = Perfect (clear, accurate explanation), 5 = Partial (somewhat clear but missing key points), 0 = Failed (vague, incorrect, or didn't explain)
+
+2. **Emotional Regulation:** Did the rep stay calm and professional when the seller became defensive about their title?
+   - Did they acknowledge the seller's concern without being dismissive?
+   - Did they maintain a warm, reassuring tone even when the seller pushed back?
+   - Did they avoid becoming defensive or argumentative?
+   - Did they use the "Hold Strategy" if needed: "Let me put you on hold and check with my underwriters"?
+   - Score 0-10: 10 = Perfect (calm, professional, empathetic), 5 = Partial (mostly calm but some tension), 0 = Failed (became defensive, argumentative, or dismissive)
+
+3. **Hold Strategy Bonus:** If the rep used the hold strategy for Clause 17, this demonstrates advanced skill:
+   - Look for: "Let me put you on hold", "Let me check with my underwriters", "Let me see what my office says"
+   - This shows the rep can de-escalate and use the "Bad Cop" (Underwriters) to build trust
+   - Bonus: +5 points to Legal Clarity score if hold strategy was used effectively
+
 **Scoring Impact:**
 - If contractSigned = true AND priceVariance <= 0: Add "Profit Protector" bonus (+10 points to goatScore)
 - If contractSigned = true AND priceVariance > 0: Penalize goatScore based on variance:
@@ -255,8 +350,40 @@ Analyze the END of the transcript to determine:
     "adversarialPhrases": [number],
     "ratio": [number] (percentage),
     "feedback": "[Brief feedback on language usage]"
+  },
+  "holdUtilization": {
+    "score": [0-10],
+    "usedHoldBeforePriceChange": true/false,
+    "priceChangesWithoutHold": [number] (count of violations),
+    "holdTiming": [number] (average hold duration in seconds),
+    "feedback": "[Brief feedback on hold usage - CRITICAL if price changed without hold]"
+  },
+    "intelligenceUtilization": {
+    "score": [0-10],
+    "subtlePivot": true/false (did rep use overheard info without admitting),
+    "trustBreach": true/false (did rep admit to listening - CRITICAL if true),
+    "intelligenceIntegrated": true/false (did rep integrate secret insight naturally),
+    "feedback": "[Brief feedback on intelligence utilization - CRITICAL if trust breach detected]"
+  },
+  "clause17Handling": {
+    "legalClarity": {
+      "score": [0-10],
+      "explainedAsReservationSign": true/false,
+      "clarifiedNotALien": true/false,
+      "explainedMutualProtection": true/false,
+      "explainedPreventsSnaking": true/false,
+      "feedback": "[Brief feedback on legal clarity - did rep explain Clause 17 accurately?]"
+    },
+    "emotionalRegulation": {
+      "score": [0-10],
+      "stayedCalm": true/false,
+      "acknowledgedConcern": true/false,
+      "maintainedWarmTone": true/false,
+      "usedHoldStrategy": true/false,
+      "feedback": "[Brief feedback on emotional regulation - did rep stay calm during objection?]"
+    }
   }
-} (always include - evaluates Good Cop/Bad Cop advocacy dynamic)
+} (always include - evaluates Good Cop/Bad Cop advocacy dynamic, hold protocol, hot mic intelligence, and contract walk-through handling)
 - logicGates: {
   "intro": "pass" or "fail",
   "motivation": "found" or "missed",
@@ -403,16 +530,71 @@ export async function gradeCall(transcript: string, roleReversal?: boolean): Pro
           ratio: parsed.advocacy.teamLanguageRatio?.ratio || 0,
           feedback: parsed.advocacy.teamLanguageRatio?.feedback || 'No feedback provided.',
         },
+        holdUtilization: {
+          score: Math.max(0, Math.min(10, parsed.advocacy.holdUtilization?.score || 0)),
+          usedHoldBeforePriceChange: parsed.advocacy.holdUtilization?.usedHoldBeforePriceChange === true,
+          priceChangesWithoutHold: parsed.advocacy.holdUtilization?.priceChangesWithoutHold || 0,
+          holdTiming: parsed.advocacy.holdUtilization?.holdTiming || 0,
+          feedback: parsed.advocacy.holdUtilization?.feedback || 'No feedback provided.',
+        },
+        intelligenceUtilization: {
+          score: Math.max(0, Math.min(10, parsed.advocacy.intelligenceUtilization?.score || 0)),
+          subtlePivot: parsed.advocacy.intelligenceUtilization?.subtlePivot === true,
+          trustBreach: parsed.advocacy.intelligenceUtilization?.trustBreach === true,
+          intelligenceIntegrated: parsed.advocacy.intelligenceUtilization?.intelligenceIntegrated === true,
+          feedback: parsed.advocacy.intelligenceUtilization?.feedback || 'No feedback provided.',
+        },
+        clause17Handling: {
+          legalClarity: {
+            score: Math.max(0, Math.min(10, parsed.advocacy.clause17Handling?.legalClarity?.score || 0)),
+            explainedAsReservationSign: parsed.advocacy.clause17Handling?.legalClarity?.explainedAsReservationSign === true,
+            clarifiedNotALien: parsed.advocacy.clause17Handling?.legalClarity?.clarifiedNotALien === true,
+            explainedMutualProtection: parsed.advocacy.clause17Handling?.legalClarity?.explainedMutualProtection === true,
+            explainedPreventsSnaking: parsed.advocacy.clause17Handling?.legalClarity?.explainedPreventsSnaking === true,
+            feedback: parsed.advocacy.clause17Handling?.legalClarity?.feedback || 'No feedback provided.',
+          },
+          emotionalRegulation: {
+            score: Math.max(0, Math.min(10, parsed.advocacy.clause17Handling?.emotionalRegulation?.score || 0)),
+            stayedCalm: parsed.advocacy.clause17Handling?.emotionalRegulation?.stayedCalm === true,
+            acknowledgedConcern: parsed.advocacy.clause17Handling?.emotionalRegulation?.acknowledgedConcern === true,
+            maintainedWarmTone: parsed.advocacy.clause17Handling?.emotionalRegulation?.maintainedWarmTone === true,
+            usedHoldStrategy: parsed.advocacy.clause17Handling?.emotionalRegulation?.usedHoldStrategy === true,
+            feedback: parsed.advocacy.clause17Handling?.emotionalRegulation?.feedback || 'No feedback provided.',
+          },
+        },
       };
+
+      // Apply Clause 17 bonus if hold strategy was used
+      if (result.advocacy.clause17Handling?.emotionalRegulation?.usedHoldStrategy) {
+        const holdStrategyBonus = 5;
+        result.advocacy.clause17Handling.legalClarity.score = Math.min(
+          10,
+          result.advocacy.clause17Handling.legalClarity.score + holdStrategyBonus
+        );
+      }
 
       // Apply advocacy bonuses (up to 15 points total)
       const rapportBonus = result.advocacy.rapportPreservation.score;
       const goToBatBonus = result.advocacy.goToBatMove.score;
       const teamLanguageBonus = result.advocacy.teamLanguageRatio.score;
+      const holdUtilizationBonus = result.advocacy.holdUtilization.score;
+      const intelligenceBonus = result.advocacy.intelligenceUtilization.score;
       
-      // Add bonuses (weighted average: 40% rapport, 30% go-to-bat, 30% team language)
-      const advocacyBonus = Math.round((rapportBonus * 0.4 + goToBatBonus * 0.3 + teamLanguageBonus * 0.3));
+      // Add bonuses (weighted average: 25% rapport, 20% go-to-bat, 15% team language, 20% hold utilization, 20% intelligence)
+      const advocacyBonus = Math.round((rapportBonus * 0.25 + goToBatBonus * 0.2 + teamLanguageBonus * 0.15 + holdUtilizationBonus * 0.2 + intelligenceBonus * 0.2));
       result.goatScore = Math.min(100, result.goatScore + advocacyBonus);
+
+      // CRITICAL PENALTY: If price changed without hold, apply heavy penalty
+      if (result.advocacy.holdUtilization.priceChangesWithoutHold > 0) {
+        const penalty = result.advocacy.holdUtilization.priceChangesWithoutHold * 15; // -15 points per violation
+        result.goatScore = Math.max(0, result.goatScore - penalty);
+      }
+
+      // CRITICAL PENALTY: If rep admitted to eavesdropping (trust breach), apply heavy penalty
+      if (result.advocacy.intelligenceUtilization.trustBreach) {
+        const trustBreachPenalty = 20; // -20 points for trust breach
+        result.goatScore = Math.max(0, result.goatScore - trustBreachPenalty);
+      }
     }
 
     return result;

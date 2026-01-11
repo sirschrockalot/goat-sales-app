@@ -10,7 +10,7 @@ import { getDispoGauntletLevel } from '@/lib/dispoGauntletLevels';
 import { getUserFromRequest } from '@/lib/getUserFromRequest';
 import type { PersonaMode } from '@/lib/vapi-client';
 import type { GauntletLevel } from '@/lib/gauntletLevels';
-import { getAmbientNoiseConfig, calculateResponseDelay } from '@/lib/vapiConfig';
+import { getElevenLabsCloserConfig, getElevenLabsSellerConfig, getDeepgramSTTConfig } from '@/lib/vapiConfig';
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,7 +26,17 @@ export async function POST(request: NextRequest) {
 
     const userId = user.id;
 
-    const body = await request.json();
+    let body: any;
+    try {
+      body = await request.json();
+    } catch (error) {
+      console.error('Failed to parse request body:', error);
+      return NextResponse.json(
+        { error: 'Invalid request body', message: 'Request body must be valid JSON' },
+        { status: 400 }
+      );
+    }
+    
     const { difficulty, personaMode, voiceHintsEnabled, gauntletLevel, roleReversal, exitStrategy, propertyLocation } = body;
 
     if (!personaMode) {
@@ -95,6 +105,9 @@ export async function POST(request: NextRequest) {
       const validDifficulty = Math.max(1, Math.min(10, parseInt(difficulty))) as DifficultyLevel;
       const isRoleReversal = roleReversal === true || roleReversal === 'true';
       persona = generatePersona(validDifficulty, validPersonaMode, isRoleReversal, propertyLocation, exitStrategy);
+      
+      // Store roleReversal in persona for voice selection logic
+      (persona as any).roleReversal = isRoleReversal;
     }
 
     // Check if we should use a pre-created assistant ID for acquisitions gauntlet
@@ -143,55 +156,73 @@ export async function POST(request: NextRequest) {
             },
           ],
         },
-        voice: {
-          provider: '11labs',
-          voiceId: persona.voice,
-          ...(persona.voiceStability !== undefined && {
-            stability: persona.voiceStability,
-          }),
-        },
+        voice: (() => {
+          const isRoleReversal = roleReversal === true || roleReversal === 'true';
+          
+          // Learning Mode (roleReversal=true): AI is acquisition agent, use Brian - Professional Closer
+          if (isRoleReversal && validPersonaMode === 'acquisition') {
+            const closerConfig = getElevenLabsCloserConfig();
+            return {
+              provider: closerConfig.provider,
+              voiceId: closerConfig.voiceId,
+              model: closerConfig.model,
+              stability: closerConfig.stability,
+              similarityBoost: closerConfig.similarityBoost,
+            };
+          }
+          
+          // Practice Mode (roleReversal=false, acquisition): AI is seller, use Stella for fast responses
+          if (!isRoleReversal && validPersonaMode === 'acquisition') {
+            const sellerConfig = getElevenLabsSellerConfig();
+            return {
+              provider: sellerConfig.provider,
+              voiceId: sellerConfig.voiceId,
+              model: sellerConfig.model,
+              stability: sellerConfig.stability,
+              similarityBoost: sellerConfig.similarityBoost,
+            };
+          }
+          
+          // Acquisitions Gauntlet: AI is seller, use Stella for fast responses
+          if (gauntletLevel && validPersonaMode === 'acquisition') {
+            const sellerConfig = getElevenLabsSellerConfig();
+            return {
+              provider: sellerConfig.provider,
+              voiceId: sellerConfig.voiceId,
+              model: sellerConfig.model,
+              stability: sellerConfig.stability,
+              similarityBoost: sellerConfig.similarityBoost,
+            };
+          }
+          
+          // Default: Use persona voice with stability if provided
+          return {
+            provider: '11labs',
+            voiceId: persona.voice,
+            ...(persona.voiceStability !== undefined && {
+              stability: persona.voiceStability,
+            }),
+          };
+        })(),
+        // Configure Deepgram STT for fast transcription (250ms endpointing)
+        transcriber: (() => {
+          const deepgramConfig = getDeepgramSTTConfig();
+          return {
+            provider: deepgramConfig.provider,
+            model: deepgramConfig.model,
+            endpointing: deepgramConfig.endpointing,
+          };
+        })(),
         firstMessage: persona.firstMessage || 'Hello, how can I help you today?',
         maxDurationSeconds: persona.maxDuration || 600,
         // Enable fillers and backchanneling for more human-like conversation
+        // Note: These properties are configured via the Vapi SDK on the client-side, not in the assistant creation API
         fillersEnabled: true,
         backchannelingEnabled: true,
-        backchannelingPhrases: [
-          'Yeah',
-          'Mhm',
-          'I see',
-          'Right',
-          'Got it',
-          'Interesting',
-          'Uh-huh',
-          'Sure',
-          'I understand',
-          'That makes sense',
-        ],
-        // Advanced interruption logic for human-like conversation
-        interruptionThreshold: 50, // 50ms - makes AI "feel" user's voice instantly
-        // Barge-in protection: if AI is mid-sentence about something important (like an objection),
-        // wait for 200ms of sustained speech before stopping (allows for natural overlaps)
-        bargeInProtection: {
-          enabled: true,
-          sustainedSpeechThreshold: 200, // 200ms of sustained speech before interrupting important points
-        },
-        // Humanized endpointing - prevents AI from "jumping the gun" on tiny pauses
-        // Note: Dynamic timeout based on sentiment is handled via system prompt logic
-        // The AI will naturally pause longer (1500ms) when processing heavy/negative sentiment
-        endOfTurnDetectionTimeout: 700, // 700ms default - AI will extend to 1500ms for heavy sentiment
-        silenceTimeout: 400, // 400ms - detects pauses for backchanneling
-        // Dynamic response delay based on sentiment (handled via system prompt)
-        // Heavy sentiment = 1500ms, Transactional = 400ms, Default = 700ms
-        // Note: Vapi may not support replyDelay directly, but the AI is instructed to pause accordingly
-        replyDelay: 700, // Default delay - AI will adjust based on sentiment (400ms-1500ms)
-        // Background ambience - "Quiet Office" room tone at 2% volume (removes "digital silence")
-        // Note: Vapi may not support ambientNoise directly, but we configure it if available
-        ...(getAmbientNoiseConfig().enabled && {
-          ambientNoise: {
-            type: getAmbientNoiseConfig().type, // 'quiet_office'
-            volume: getAmbientNoiseConfig().volume, // 0.02 (2%)
-          },
-        }),
+        // Configure background sound to allow ambient noise
+        // "off" disables noise filtering, allowing ambient sounds to be heard
+        // This enables the "quiet office" ambient noise effect
+        backgroundSound: 'off',
         // Enable control API for voice hints
         serverUrl: process.env.NEXT_PUBLIC_APP_URL
           ? `${process.env.NEXT_PUBLIC_APP_URL}/api/vapi-webhook`
@@ -210,10 +241,34 @@ export async function POST(request: NextRequest) {
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      console.error('Vapi API error:', error);
+      let errorDetails: string;
+      let errorMessage: string = 'Unknown error';
+      try {
+        const errorJson = await response.json();
+        errorDetails = JSON.stringify(errorJson);
+        // Try to extract a meaningful error message from the JSON response
+        if (errorJson.message) {
+          errorMessage = errorJson.message;
+        } else if (errorJson.error) {
+          errorMessage = typeof errorJson.error === 'string' ? errorJson.error : JSON.stringify(errorJson.error);
+        } else if (errorJson.details) {
+          errorMessage = typeof errorJson.details === 'string' ? errorJson.details : JSON.stringify(errorJson.details);
+        }
+        console.error('Vapi API error (JSON):', errorJson);
+      } catch {
+        const errorText = await response.text();
+        errorDetails = errorText || `HTTP ${response.status} ${response.statusText}`;
+        errorMessage = errorText || `HTTP ${response.status} ${response.statusText}`;
+        console.error('Vapi API error (text):', errorDetails);
+      }
       return NextResponse.json(
-        { error: 'Failed to create Vapi assistant', details: error },
+        { 
+          error: 'Failed to create Vapi assistant',
+          message: errorMessage,
+          details: errorDetails,
+          status: response.status,
+          statusText: response.statusText
+        },
         { status: response.status }
       );
     }

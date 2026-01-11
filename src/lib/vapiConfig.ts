@@ -139,3 +139,77 @@ COGNITIVE MEMORY - 5-Minute Recall:
 - This demonstrates active long-term listening and shows you're not just processing words in real-time
 - Reference their name, their reason for moving, or a key detail they shared in the opening`;
 }
+
+/**
+ * Get hold music audio configuration
+ * Returns settings for hold music that plays during hold period
+ * Music should be at 70% volume, AI voice at 30% (for rep's perspective)
+ */
+export function getHoldMusicConfig(): {
+  enabled: boolean;
+  volume: number; // 0-1, 0.7 = 70% volume
+  voiceVolume: number; // 0-1, 0.3 = 30% volume (AI voice over music)
+} {
+  return {
+    enabled: true,
+    volume: 0.7, // Hold music at 70% volume
+    voiceVolume: 0.3, // AI voice at 30% volume over music
+  };
+}
+
+/**
+ * Get ElevenLabs voice configuration for Acquisitions Assistant (The Closer)
+ * Uses Brian - Professional Closer voice with high-fidelity settings
+ */
+export function getElevenLabsCloserConfig(): {
+  provider: 'elevenlabs';
+  voiceId: string;
+  model: string;
+  stability: number;
+  similarityBoost: number;
+} {
+  return {
+    provider: 'elevenlabs',
+    voiceId: 'nPczCjzI2devNBz1zWls', // Brian - Professional Closer
+    model: 'eleven_turbo_v2_5', // Best for low-latency realism
+    stability: 0.4, // Human inflection (lower = more variation)
+    similarityBoost: 0.8, // Consistent authority (higher = more consistent)
+  };
+}
+
+/**
+ * Get Deepgram STT configuration for fast transcription
+ * Uses nova-2 model with 250ms endpointing for instant AI reactions
+ */
+export function getDeepgramSTTConfig(): {
+  provider: 'deepgram';
+  model: string;
+  endpointing: number; // milliseconds
+} {
+  return {
+    provider: 'deepgram',
+    model: 'nova-2', // Fast, accurate transcription
+    endpointing: 250, // 250ms - AI reacts instantly when rep stops talking
+  };
+}
+
+/**
+ * Get ElevenLabs voice configuration for Practice Mode (Skeptical Seller)
+ * Uses ElevenLabs voice (Stella) for ultra-fast response times
+ * Note: Deepgram Aura is configured via the transcriber, not the voice provider
+ */
+export function getElevenLabsSellerConfig(): {
+  provider: 'elevenlabs';
+  voiceId: string;
+  model: string;
+  stability: number;
+  similarityBoost: number;
+} {
+  return {
+    provider: 'elevenlabs',
+    voiceId: 'Stella', // ElevenLabs Stella voice for fast responses (testing rep's speed)
+    model: 'eleven_turbo_v2_5', // Low-latency for testing rep's speed
+    stability: 0.5, // Balanced variation
+    similarityBoost: 0.7, // Good consistency
+  };
+}

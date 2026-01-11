@@ -10,6 +10,7 @@
 // TODO: Verify the actual @vapi-ai/web SDK API and adjust imports/usage accordingly
 // The SDK might use different class names, methods, or event patterns
 import Vapi from '@vapi-ai/web';
+import { getAmbientNoiseConfig } from '@/lib/vapiConfig';
 
 export type PersonaMode = 'acquisition' | 'disposition';
 
@@ -65,10 +66,27 @@ export class VapiClient {
     // Initialize Vapi SDK with Daily call config to ensure microphone prompt
     // Constructor: apiToken, apiBaseUrl?, dailyCallConfig?, dailyCallObject?
     // Use alwaysIncludeMicInPermissionPrompt to ensure microphone is requested
+    const ambientNoiseConfig = getAmbientNoiseConfig();
+    const dailyCallConfig: any = {
+      alwaysIncludeMicInPermissionPrompt: true,
+    };
+    
+    // Add ambient noise configuration if enabled
+    // Note: Vapi SDK may support ambient noise via dailyCallConfig or dailyCallObject
+    // Check Vapi SDK documentation for the correct property name
+    if (ambientNoiseConfig.enabled) {
+      // Try adding ambient noise to dailyCallConfig
+      // The property name may vary - check Vapi SDK docs
+      dailyCallConfig.ambientNoise = {
+        type: ambientNoiseConfig.type,
+        volume: ambientNoiseConfig.volume,
+      };
+    }
+    
     this.vapi = new Vapi(
       config.apiKey,
       undefined, // apiBaseUrl - use default
-      { alwaysIncludeMicInPermissionPrompt: true }, // dailyCallConfig - ensure mic prompt
+      dailyCallConfig,
       { startAudioOff: false } // dailyCallObject - start with audio on
     );
 

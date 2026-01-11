@@ -25,6 +25,10 @@ import { getGauntletLevel } from '@/lib/gauntletLevels';
 import DealCalculator from '@/components/call/DealCalculator';
 import type { ExitStrategy } from '@/lib/financialFramework';
 import { useAdvocacyTracker } from '@/hooks/useAdvocacyTracker';
+import UnderwriterResponse from '@/components/hud/UnderwriterResponse';
+import SecretInsight from '@/components/hud/SecretInsight';
+import ContractWalkthrough from '@/components/hud/ContractWalkthrough';
+import { Pause, Play } from 'lucide-react';
 
 interface RadialGaugeProps {
   label: string;
@@ -150,7 +154,9 @@ interface LiveCallHUDProps {
 }
 
 export default function LiveCallHUD({ gauntletLevel, exitStrategy = 'fix_and_flip' }: LiveCallHUDProps = {}) {
-  const { callStatus, transcript, transcriptionHistory, personaMode, isActive } = useVapi();
+  const { callStatus, transcript, transcriptionHistory, personaMode, isActive, placeOnHold, resumeFromHold, isOnHold, holdDuration } = useVapi();
+  const [showUnderwriterResponse, setShowUnderwriterResponse] = useState(false);
+  const [holdProgress, setHoldProgress] = useState<number>(0);
   const [currentStep, setCurrentStep] = useState(0);
   const [gateStatus, setGateStatus] = useState<'approval' | 'denial' | 'pending'>('pending');
   const [persona, setPersona] = useState<PersonaConfig | null>(null);
@@ -161,6 +167,7 @@ export default function LiveCallHUD({ gauntletLevel, exitStrategy = 'fix_and_fli
   const [suggestedMaxOffer, setSuggestedMaxOffer] = useState<number | null>(null);
   const [detectedPrice, setDetectedPrice] = useState<number | null>(null);
   const [priceVariance, setPriceVariance] = useState<number | null>(null);
+  const [isContractWalkthrough, setIsContractWalkthrough] = useState(false);
   
   // Voice hints hook
   const { voiceHintsEnabled, setVoiceHintsEnabled } = useVoiceHints(isActive || false);
@@ -173,6 +180,22 @@ export default function LiveCallHUD({ gauntletLevel, exitStrategy = 'fix_and_fli
   const heatStreak = useHeatStreak(isActive || false, scriptTracker);
   const tonalityCoach = useTonalityCoach(isActive || false);
   const advocacyMetrics = useAdvocacyTracker(transcript, isActive || false);
+
+  // Detect contract walk-through mode
+  useEffect(() => {
+    if (!isActive || !transcript) return;
+    const lowerTranscript = transcript.toLowerCase();
+    const contractKeywords = [
+      'walk through the contract',
+      'explain the purchase agreement',
+      'go over the contract',
+      'review the agreement',
+      'contract walk',
+      'purchase agreement',
+    ];
+    const isContractMode = contractKeywords.some(keyword => lowerTranscript.includes(keyword));
+    setIsContractWalkthrough(isContractMode);
+  }, [transcript, isActive]);
   
   // Calculate audio intensity for Goat Mode (based on certainty/pacing)
   const audioIntensity = Math.min(1, (certainty / 100) * 0.7 + (pacing / 100) * 0.3);
@@ -252,6 +275,74 @@ export default function LiveCallHUD({ gauntletLevel, exitStrategy = 'fix_and_fli
       />
 
       <div className="w-full space-y-3">
+      {/* Place on Hold Button - Prominent placement */}
+      {!isOnHold && currentStep >= 4 && (
+        <motion.button
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          onClick={() => {
+            placeOnHold();
+            setShowUnderwriterResponse(true);
+            // Start progress bar animation (15-30 seconds)
+            const holdTime = 20000 + Math.random() * 15000; // 20-35 seconds
+            const interval = 100; // Update every 100ms
+            const steps = holdTime / interval;
+            let currentStep = 0;
+            const progressInterval = setInterval(() => {
+              currentStep++;
+              setHoldProgress((currentStep / steps) * 100);
+              if (currentStep >= steps) {
+                clearInterval(progressInterval);
+              }
+            }, interval);
+          }}
+          className="mb-4 flex w-full items-center justify-center gap-3 rounded-xl border-2 border-blue-500 bg-blue-500/20 px-6 py-4 font-semibold text-white transition-all hover:bg-blue-500/30 hover:shadow-lg hover:shadow-blue-500/50"
+        >
+          <Pause className="w-5 h-5" />
+          <span>Place on Hold - Consult Underwriters</span>
+        </motion.button>
+      )}
+
+      {/* Hold Status Indicator */}
+      {isOnHold && (
+        <motion.div
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className="mb-4 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4"
+        >
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+                className="h-4 w-4 rounded-full border-2 border-yellow-400 border-t-transparent"
+              />
+              <span className="text-sm font-semibold text-yellow-400">Consulting Underwriters...</span>
+            </div>
+            <span className="text-xs text-gray-400">{holdDuration}s</span>
+          </div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-black/20">
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${holdProgress}%` }}
+              transition={{ duration: 0.1 }}
+              className="h-full bg-gradient-to-r from-yellow-400 to-yellow-600"
+            />
+          </div>
+          <button
+            onClick={() => {
+              resumeFromHold();
+              setShowUnderwriterResponse(false);
+              setHoldProgress(0);
+            }}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-green-700"
+          >
+            <Play className="w-4 h-4" />
+            Resume Call
+          </button>
+        </motion.div>
+      )}
+
       {/* Script Progress Tracker with Training Mode Toggle */}
       <motion.div
         initial={{ y: 50, opacity: 0 }}
@@ -602,6 +693,42 @@ export default function LiveCallHUD({ gauntletLevel, exitStrategy = 'fix_and_fli
         <VoiceCoach difficulty={5} />
       </motion.div>
       </div>
+
+      {/* Underwriter Response Modal */}
+      <UnderwriterResponse
+        isVisible={showUnderwriterResponse}
+        gauntletLevel={gauntletLevel}
+        currentOffer={detectedPrice || undefined}
+        arv={undefined} // Could extract from transcript if needed
+        repairs={undefined} // Could extract from transcript if needed
+        onClose={() => {
+          setShowUnderwriterResponse(false);
+          if (isOnHold) {
+            resumeFromHold();
+            setHoldProgress(0);
+          }
+        }}
+      />
+
+      {/* Secret Insight Display (Hot Mic Eavesdropping) */}
+      {isOnHold && (
+        <SecretInsight
+          transcript={transcript}
+          isOnHold={isOnHold}
+        />
+      )}
+
+      {/* Contract Walk-Through Display */}
+      {isContractWalkthrough && (
+        <ContractWalkthrough
+          transcript={transcript}
+          isActive={isActive || false}
+          onClauseHighlight={(clauseNumber) => {
+            // Could trigger additional UI updates or analytics
+            console.log('Highlighting clause:', clauseNumber);
+          }}
+        />
+      )}
     </>
   );
 }

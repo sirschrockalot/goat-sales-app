@@ -61,6 +61,10 @@ export function VapiProvider({ children }: VapiProviderProps) {
   const [callId, setCallId] = useState<string | null>(null);
   const [controlUrl, setControlUrl] = useState<string | null>(null);
   const [scriptHiddenDuration, setScriptHiddenDuration] = useState<number>(0);
+  const [isOnHold, setIsOnHold] = useState<boolean>(false);
+  const [holdDuration, setHoldDuration] = useState<number>(0);
+  const [holdStartTime, setHoldStartTime] = useState<number | null>(null);
+  const [holdCount, setHoldCount] = useState<number>(0);
 
   // Derived state
   const isConnecting = callStatus.status === 'connecting';
@@ -184,6 +188,8 @@ export function VapiProvider({ children }: VapiProviderProps) {
                   source: 'vapi',
                   manuallyTriggered: true, // Flag to indicate manual trigger
                   scriptHiddenDuration: currentScriptHiddenDuration, // Include Pro Mode duration
+                  holdDuration: holdDuration,
+                  holdCount: holdCount,
                 },
               },
             }),
@@ -266,6 +272,31 @@ export function VapiProvider({ children }: VapiProviderProps) {
     callId,
     controlUrl,
     scriptHiddenDuration,
+    placeOnHold: () => {
+      const client = getVapiClient();
+      if (client) {
+        client.placeOnHold();
+        setIsOnHold(true);
+        setHoldStartTime(Date.now());
+        setHoldCount(prev => prev + 1);
+        // Send message to AI that rep is placing on hold
+        client.sendMessage("Hold on one moment, let me check with my underwriters on this.");
+      }
+    },
+    resumeFromHold: () => {
+      const client = getVapiClient();
+      if (client) {
+        client.resumeFromHold();
+        if (holdStartTime) {
+          const duration = Math.floor((Date.now() - holdStartTime) / 1000);
+          setHoldDuration(duration);
+          setHoldStartTime(null);
+        }
+        setIsOnHold(false);
+      }
+    },
+    isOnHold,
+    holdDuration,
     initialize,
     startCall,
     endCall,

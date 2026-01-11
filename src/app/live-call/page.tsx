@@ -16,6 +16,7 @@ import GoatHint from '@/components/call/GoatHint';
 import LearningModeHUD from '@/components/hud/LearningModeHUD';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import type { PersonaMode } from '@/lib/vapi-client';
+import { useAmbientNoise } from '@/hooks/useAmbientNoise';
 
 const PERSONA_NAMES: Record<string, string> = {
   skeptic: 'The Skeptic',
@@ -35,6 +36,8 @@ export default function LiveCallPage() {
   const learningMode = searchParams.get('learningMode') === 'true';
   const personaName = PERSONA_NAMES[personaId] || 'AI Partner';
   const exitStrategy = (searchParams.get('exitStrategy') || 'fix_and_flip') as 'fix_and_flip' | 'buy_and_hold' | 'creative_finance';
+  const gauntletLevelParam = searchParams.get('gauntletLevel');
+  const gauntletLevel = gauntletLevelParam ? parseInt(gauntletLevelParam, 10) : undefined;
 
   const { 
     callStatus, 
@@ -45,6 +48,9 @@ export default function LiveCallPage() {
     startCall, 
     endCall 
   } = useVapi();
+
+  // Play ambient noise during active calls
+  useAmbientNoise(isActive);
 
   const [aiMessage, setAiMessage] = useState("I don't know, your offer sounds too low...");
 
@@ -98,7 +104,6 @@ export default function LiveCallPage() {
       try {
         const apiKey = process.env.NEXT_PUBLIC_VAPI_API_KEY;
         const assistantId = searchParams.get('assistantId');
-        const gauntletLevel = searchParams.get('gauntletLevel');
         
         if (apiKey) {
           // Determine which assistant ID to use
@@ -133,7 +138,7 @@ export default function LiveCallPage() {
                 credentials: 'include', // Also send cookies
                 body: JSON.stringify({
                   personaMode: mode,
-                  gauntletLevel: gauntletLevel ? parseInt(gauntletLevel) : undefined,
+                  gauntletLevel: gauntletLevel,
                   // If no gauntletLevel, provide a default difficulty (medium)
                   difficulty: gauntletLevel ? undefined : 5,
                   roleReversal: roleReversal,
@@ -148,8 +153,41 @@ export default function LiveCallPage() {
                 console.error('Unauthorized: Please log in to create assistants');
                 throw new Error('Authentication required to create assistant');
               } else {
-                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-                console.error('Failed to create assistant:', errorData);
+                // Try to parse error response
+                let errorData: any;
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                  try {
+                    errorData = await response.json();
+                  } catch (e) {
+                    errorData = { error: 'Failed to parse error response' };
+                  }
+                } else {
+                  const errorText = await response.text();
+                  errorData = { 
+                    error: errorText || 'Unknown error',
+                    status: response.status,
+                    statusText: response.statusText
+                  };
+                }
+                console.error('Failed to create assistant - Full error data:', JSON.stringify(errorData, null, 2));
+                // Build a more descriptive error message
+                // Priority: message > error > details > full object > status
+                let errorMessage: string;
+                if (errorData.message) {
+                  errorMessage = errorData.message;
+                } else if (errorData.error) {
+                  errorMessage = typeof errorData.error === 'string' ? errorData.error : JSON.stringify(errorData.error);
+                } else if (errorData.details) {
+                  errorMessage = typeof errorData.details === 'string' ? errorData.details : JSON.stringify(errorData.details);
+                } else if (typeof errorData === 'string') {
+                  errorMessage = errorData;
+                } else if (Object.keys(errorData).length > 0) {
+                  errorMessage = JSON.stringify(errorData);
+                } else {
+                  errorMessage = `HTTP ${response.status} ${response.statusText || 'Unknown error'}`;
+                }
+                throw new Error(`Failed to create assistant: ${errorMessage}`);
               }
             } catch (error) {
               console.error('Failed to get/create assistant:', error);
@@ -224,7 +262,7 @@ export default function LiveCallPage() {
             /* Live Call HUD with animated gauges - Normal practice mode */
             <ErrorBoundary>
               <LiveCallHUD 
-                gauntletLevel={gauntletLevel ? parseInt(gauntletLevel) : undefined}
+                gauntletLevel={gauntletLevel}
                 exitStrategy={exitStrategy}
               />
             </ErrorBoundary>

@@ -13,6 +13,8 @@ Quick reference checklist for deploying the Sales Goat App to production.
 - [ ] `VAPI_SECRET_KEY` ⚠️ SECRET - Vapi secret key
 - [ ] `NEXT_PUBLIC_VAPI_API_KEY` - Vapi public API key
 - [ ] `OPENAI_API_KEY` ⚠️ SECRET - OpenAI API key
+- [ ] `ELEVEN_LABS_API_KEY` ⚠️ SECRET - ElevenLabs API key (for Brian/Stella voices)
+- [ ] `DEEPGRAM_API_KEY` ⚠️ SECRET - Deepgram API key (for fast STT)
 - [ ] `CRON_SECRET` ⚠️ SECRET - Generate with `openssl rand -hex 32`
 - [ ] `NEXT_PUBLIC_APP_URL` - Your Vercel deployment URL
 
