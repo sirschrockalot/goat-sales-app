@@ -19,7 +19,7 @@ import { useHeatStreak } from '@/hooks/useHeatStreak';
 import { useTonalityCoach } from '@/hooks/useTonalityCoach';
 import { useTrainingSession } from '@/hooks/useTrainingSession';
 import GoatModeLayer from '@/components/effects/GoatModeLayer';
-import { Volume2, VolumeX, Zap, Radio, Eye, EyeOff, Heart, BookOpen, DollarSign, AlertTriangle, Users, Shield } from 'lucide-react';
+import { Volume2, VolumeX, Zap, Radio, Eye, EyeOff, Heart, BookOpen, DollarSign, AlertTriangle, Users, Shield, Target } from 'lucide-react';
 import type { PersonaConfig } from '@/lib/personas';
 import { getGauntletLevel } from '@/lib/gauntletLevels';
 import DealCalculator from '@/components/call/DealCalculator';
@@ -155,6 +155,8 @@ interface LiveCallHUDProps {
 
 export default function LiveCallHUD({ gauntletLevel, exitStrategy = 'fix_and_flip' }: LiveCallHUDProps = {}) {
   const { callStatus, transcript, transcriptionHistory, personaMode, isActive, placeOnHold, resumeFromHold, isOnHold, holdDuration } = useVapi();
+  const searchParams = useSearchParams();
+  const propertyLocation = searchParams.get('propertyLocation');
   const [showUnderwriterResponse, setShowUnderwriterResponse] = useState(false);
   const [holdProgress, setHoldProgress] = useState<number>(0);
   const [currentStep, setCurrentStep] = useState(0);
@@ -168,6 +170,9 @@ export default function LiveCallHUD({ gauntletLevel, exitStrategy = 'fix_and_fli
   const [detectedPrice, setDetectedPrice] = useState<number | null>(null);
   const [priceVariance, setPriceVariance] = useState<number | null>(null);
   const [isContractWalkthrough, setIsContractWalkthrough] = useState(false);
+  
+  // Get voice persona label for display
+  const voicePersonaLabel = propertyLocation ? getVoicePersonaLabel(propertyLocation) : null;
   
   // Voice hints hook
   const { voiceHintsEnabled, setVoiceHintsEnabled } = useVoiceHints(isActive || false);
@@ -454,6 +459,12 @@ export default function LiveCallHUD({ gauntletLevel, exitStrategy = 'fix_and_fli
             }}
           />
           <span className="capitalize">{callStatus.status}</span>
+          {voicePersonaLabel && (
+            <>
+              <span className="mx-2">•</span>
+              <span className="text-xs font-medium text-blue-400">{voicePersonaLabel}</span>
+            </>
+          )}
           {currentStep > 0 && (
             <>
               <span className="mx-2">•</span>

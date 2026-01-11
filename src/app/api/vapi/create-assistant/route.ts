@@ -11,6 +11,7 @@ import { getUserFromRequest } from '@/lib/getUserFromRequest';
 import type { PersonaMode } from '@/lib/vapi-client';
 import type { GauntletLevel } from '@/lib/gauntletLevels';
 import { getElevenLabsCloserConfig, getElevenLabsSellerConfig, getDeepgramSTTConfig } from '@/lib/vapiConfig';
+import { getRegionalVoiceConfig, getVoicePersonaLabel } from '@/lib/voiceRegions';
 
 export async function POST(request: NextRequest) {
   try {
@@ -171,7 +172,20 @@ export async function POST(request: NextRequest) {
             };
           }
           
-          // Practice Mode (roleReversal=false, acquisition): AI is seller, use Stella for fast responses
+          // Practice Mode (roleReversal=false, acquisition): Use regional voice if propertyLocation provided
+          if (!isRoleReversal && validPersonaMode === 'acquisition' && propertyLocation) {
+            const regionalConfig = getRegionalVoiceConfig(propertyLocation);
+            return {
+              provider: 'elevenlabs',
+              voiceId: regionalConfig.voiceId,
+              model: 'eleven_turbo_v2_5',
+              stability: regionalConfig.stability,
+              similarityBoost: regionalConfig.similarityBoost || 0.75,
+              // Note: speed is not directly supported in Vapi voice config, but can be adjusted via SSML
+            };
+          }
+          
+          // Practice Mode (roleReversal=false, acquisition): AI is seller, use Stella for fast responses (no propertyLocation)
           if (!isRoleReversal && validPersonaMode === 'acquisition') {
             const sellerConfig = getElevenLabsSellerConfig();
             return {
@@ -183,7 +197,19 @@ export async function POST(request: NextRequest) {
             };
           }
           
-          // Acquisitions Gauntlet: AI is seller, use Stella for fast responses
+          // Acquisitions Gauntlet: Use regional voice if propertyLocation provided
+          if (gauntletLevel && validPersonaMode === 'acquisition' && propertyLocation) {
+            const regionalConfig = getRegionalVoiceConfig(propertyLocation);
+            return {
+              provider: 'elevenlabs',
+              voiceId: regionalConfig.voiceId,
+              model: 'eleven_turbo_v2_5',
+              stability: regionalConfig.stability,
+              similarityBoost: regionalConfig.similarityBoost || 0.75,
+            };
+          }
+          
+          // Acquisitions Gauntlet: AI is seller, use Stella for fast responses (no propertyLocation)
           if (gauntletLevel && validPersonaMode === 'acquisition') {
             const sellerConfig = getElevenLabsSellerConfig();
             return {
@@ -235,7 +261,10 @@ export async function POST(request: NextRequest) {
           voiceHintsEnabled: voiceHintsEnabled || false,
           behaviors: persona.behaviors,
           ...(exitStrategy && { exitStrategy }),
-          ...(propertyLocation && { propertyLocation }),
+          ...(propertyLocation && { 
+            propertyLocation,
+            voicePersona: getVoicePersonaLabel(propertyLocation), // Store voice persona label for HUD
+          }),
         },
       }),
     });

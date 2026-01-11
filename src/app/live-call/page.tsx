@@ -132,6 +132,9 @@ export default function LiveCallPage() {
                 headers['Authorization'] = `Bearer ${accessToken}`;
               }
 
+              // Get propertyLocation from URL params if provided
+              const propertyLocationParam = searchParams.get('propertyLocation');
+              
               const response = await fetch('/api/vapi/create-assistant', {
                 method: 'POST',
                 headers,
@@ -143,6 +146,7 @@ export default function LiveCallPage() {
                   difficulty: gauntletLevel ? undefined : 5,
                   roleReversal: roleReversal,
                   exitStrategy: exitStrategy,
+                  ...(propertyLocationParam && { propertyLocation: propertyLocationParam }),
                 }),
               });
               
