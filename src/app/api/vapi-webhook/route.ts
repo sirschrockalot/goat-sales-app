@@ -440,6 +440,11 @@ export async function POST(request: NextRequest) {
               holdDuration: call.metadata?.holdDuration || 0,
               holdCount: call.metadata?.holdCount || 0,
               priceChangesWithoutHold: gradingResult.advocacy?.holdUtilization?.priceChangesWithoutHold || 0,
+              // Model selection logging for cost optimization audit
+              model_used: call.metadata?.model_used || null,
+              reason_for_selection: call.metadata?.reason_for_selection || null,
+              daily_spend_at_selection: call.metadata?.daily_spend_at_selection || null,
+              session_type: call.metadata?.session_type || null,
             },
             ended_at: new Date().toISOString(),
           })

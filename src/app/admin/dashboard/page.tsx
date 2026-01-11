@@ -28,6 +28,7 @@ import TrainingReport from '@/components/admin/TrainingReport';
 import AITrainingCenter from '@/components/admin/AITrainingCenter';
 import EvolutionReview from '@/components/admin/EvolutionReview';
 import CloserLeaderboard from '@/components/admin/CloserLeaderboard';
+import BillingDashboard from '@/components/admin/BillingDashboard';
 
 interface Stats {
   totalCallsToday: number;
@@ -461,6 +462,11 @@ export default function AdminDashboard() {
         {/* Closer Leaderboard */}
         <div className="mb-8">
           <CloserLeaderboard />
+        </div>
+
+        {/* Billing & Usage Monitor */}
+        <div className="mb-8">
+          <BillingDashboard />
         </div>
 
         {/* User Management */}

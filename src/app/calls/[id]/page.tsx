@@ -6,10 +6,10 @@
  * Matches the 4th screen in the mockup
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Share2, Check, Trophy, Sparkles } from 'lucide-react';
+import { ArrowLeft, Share2, Check, Trophy, Sparkles, Shield, ShieldOff } from 'lucide-react';
 import AudioPlayer from '@/components/call/AudioPlayer';
 import DeviationMap from '@/components/call/DeviationMap';
 import ErrorBoundary from '@/components/ErrorBoundary';
@@ -17,6 +17,7 @@ import LevelUpOverlay from '@/components/effects/LevelUpOverlay';
 import { getSoundboard } from '@/lib/soundboard';
 import { getGauntletLevel } from '@/lib/gauntletLevels';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRouter } from 'next/navigation';
 import type { DeviationAnalysis } from '@/lib/analyzeDeviation';
 
 interface CallResult {
@@ -38,6 +39,8 @@ interface CallResult {
   feedback?: string;
   script_adherence?: DeviationAnalysis;
   ended_at?: string;
+  is_permanent_knowledge?: boolean;
+  metadata?: any;
 }
 
 const GOAT_STEPS = [
@@ -52,7 +55,7 @@ export default function CallDebriefPage() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const callId = params.id as string;
   const gauntletLevel = searchParams.get('gauntletLevel');
 
@@ -66,6 +69,8 @@ export default function CallDebriefPage() {
   const [showLevelUp, setShowLevelUp] = useState(false);
   const [newLevel, setNewLevel] = useState<number | null>(null);
   const [masteredGate, setMasteredGate] = useState<string | null>(null);
+  const [isPermanentKnowledge, setIsPermanentKnowledge] = useState(false);
+  const [togglingPermanent, setTogglingPermanent] = useState(false);
   const maxRetries = 10; // Poll for up to 30 seconds (3s intervals)
 
   useEffect(() => {
@@ -92,6 +97,7 @@ export default function CallDebriefPage() {
           }
           
           setCallResult(data);
+          setIsPermanentKnowledge(data.is_permanent_knowledge || false);
           setLoading(false);
 
           // If this is a gauntlet call and score is available, evaluate it
@@ -317,6 +323,36 @@ export default function CallDebriefPage() {
     }
   }, [callResult?.goat_score]);
 
+  // Toggle permanent knowledge flag (admin only)
+  const handleTogglePermanentKnowledge = async () => {
+    if (!isAdmin || !callId) return;
+
+    setTogglingPermanent(true);
+    try {
+      const response = await fetch(`/api/admin/calls/${callId}/permanent-knowledge`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          is_permanent_knowledge: !isPermanentKnowledge,
+        }),
+      });
+
+      if (response.ok) {
+        setIsPermanentKnowledge(!isPermanentKnowledge);
+        if (callResult) {
+          setCallResult({
+            ...callResult,
+            is_permanent_knowledge: !isPermanentKnowledge,
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error toggling permanent knowledge:', error);
+    } finally {
+      setTogglingPermanent(false);
+    }
+  };
+
   // Play chime when logic gates pass (only once when gates are first loaded)
   const previousPassedCountRef = useRef(0);
   useEffect(() => {
@@ -364,14 +400,40 @@ export default function CallDebriefPage() {
           <ArrowLeft className="w-4 h-4" />
           {gauntletLevel ? 'Back to Gauntlet' : 'Back to Home'}
         </button>
-        <div className="flex items-center gap-3">
-          <h1 className="text-3xl font-bold">Call Debrief</h1>
-          {gauntletLevel && (
-            <div className="px-3 py-1 rounded-full bg-amber-400/20 border border-amber-400/50">
-              <span className="text-xs font-semibold text-amber-400">
-                Level {gauntletLevel}
-              </span>
-            </div>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-bold">Call Debrief</h1>
+            {gauntletLevel && (
+              <div className="px-3 py-1 rounded-full bg-amber-400/20 border border-amber-400/50">
+                <span className="text-xs font-semibold text-amber-400">
+                  Level {gauntletLevel}
+                </span>
+              </div>
+            )}
+          </div>
+          {isAdmin && (
+            <button
+              onClick={handleTogglePermanentKnowledge}
+              disabled={togglingPermanent}
+              className={`px-4 py-2 rounded-lg border transition-all flex items-center gap-2 ${
+                isPermanentKnowledge
+                  ? 'bg-green-500/20 border-green-500/50 text-green-400'
+                  : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
+              }`}
+              title={isPermanentKnowledge ? 'Protected from archiving' : 'Click to protect from archiving'}
+            >
+              {isPermanentKnowledge ? (
+                <>
+                  <Shield className="w-4 h-4" />
+                  <span className="text-sm font-semibold">Protected</span>
+                </>
+              ) : (
+                <>
+                  <ShieldOff className="w-4 h-4" />
+                  <span className="text-sm">Protect</span>
+                </>
+              )}
+            </button>
           )}
         </div>
       </div>

@@ -55,3 +55,15 @@ chrome-extension/*.css
 # OS
 .DS_Store
 Thumbs.db
+
+# DNA Scraper output
+raw_dna/
+urls_to_scrape.txt
+
+# Private Portal
+uploads/private_videos/
+playwright/.auth/
+temp/
+
+# Prompt Outputs
+merged_prompt_output.txt

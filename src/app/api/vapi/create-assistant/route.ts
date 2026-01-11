@@ -12,6 +12,7 @@ import type { PersonaMode } from '@/lib/vapi-client';
 import type { GauntletLevel } from '@/lib/gauntletLevels';
 import { getElevenLabsCloserConfig, getElevenLabsSellerConfig, getDeepgramSTTConfig, getCentralizedAssistantConfig, getVoiceSettings, getTestStability, type ScriptGate } from '@/lib/vapiConfig';
 import { getRegionalVoiceConfig, getVoicePersonaLabel } from '@/lib/voiceRegions';
+import { getOptimalModel, determineSessionType, formatModelSelectionForLogging } from '@/lib/modelSwitcher';
 
 export async function POST(request: NextRequest) {
   try {
@@ -168,6 +169,14 @@ export async function POST(request: NextRequest) {
     // This will be saved to the calls table to track performance
     const testStabilityValue = getTestStability();
 
+    // Model Selection: Optimize costs based on daily spend and session type
+    const sessionType = determineSessionType(battleTestMode, apexLevel, gauntletLevel, roleReversal);
+    const modelSelection = await getOptimalModel(sessionType, battleTestMode);
+    
+    // Override model based on cost optimization
+    const selectedModel = modelSelection.model;
+    const modelSelectionLog = formatModelSelectionForLogging(modelSelection);
+
     // Create assistant via Vapi API
     const response = await fetch('https://api.vapi.ai/assistant', {
       method: 'POST',
@@ -180,7 +189,7 @@ export async function POST(request: NextRequest) {
         model: useCentralizedConfig && centralizedConfig
           ? {
               provider: centralizedConfig.model.provider,
-              model: centralizedConfig.model.model, // GPT-4o
+              model: selectedModel, // Optimized model (GPT-4o or GPT-4o-Mini)
               temperature: centralizedConfig.model.temperature,
               messages: [
                 {
@@ -191,7 +200,7 @@ export async function POST(request: NextRequest) {
             }
           : {
               provider: 'openai',
-              model: persona.model, // GPT-4o
+              model: selectedModel, // Optimized model (GPT-4o or GPT-4o-Mini)
               temperature: persona.temperature,
               messages: [
                 {
@@ -324,6 +333,11 @@ export async function POST(request: NextRequest) {
             voicePersona: getVoicePersonaLabel(propertyLocation), // Store voice persona label for HUD
           }),
           testStabilityValue: testStabilityValue, // Save test stability for A/B testing analysis
+          // Model selection logging for cost optimization audit
+          model_used: modelSelectionLog.model_used,
+          reason_for_selection: modelSelectionLog.reason_for_selection,
+          daily_spend_at_selection: modelSelectionLog.daily_spend,
+          session_type: modelSelectionLog.session_type,
         },
       }),
     });

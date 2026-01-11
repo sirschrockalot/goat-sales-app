@@ -405,11 +405,76 @@ export interface VoiceSettings {
 }
 
 /**
+ * Get voice settings based on sentiment (for emotional mirroring)
+ * If user sentiment is negative (angry/frustrated), adjust to sound "calmly authoritative"
+ */
+export function getVoiceSettingsFromSentiment(
+  sentiment: 'positive' | 'neutral' | 'negative' | 'angry' | 'frustrated'
+): VoiceSettings {
+  if (sentiment === 'negative' || sentiment === 'angry' || sentiment === 'frustrated') {
+    // Calmly authoritative: Higher stability (calm), good clarity
+    return {
+      stability: 0.6, // Calm, steady voice
+      similarityBoost: 0.8,
+      style: 0.05, // Professional, not overly expressive
+      styleExaggeration: 0.05,
+    };
+  }
+
+  // Default for positive/neutral
+  return {
+    stability: 0.5,
+    similarityBoost: 0.8,
+    style: 0.10,
+    styleExaggeration: 0.10,
+  };
+}
+
+/**
+ * Analyze sentiment from Deepgram transcript (if available) or fallback to keyword detection
+ */
+export function analyzeSentimentFromTranscript(transcript: string): 'positive' | 'neutral' | 'negative' | 'angry' | 'frustrated' {
+  if (!transcript || transcript.length === 0) {
+    return 'neutral';
+  }
+
+  const lowerTranscript = transcript.toLowerCase();
+
+  // Negative/angry indicators
+  const angryKeywords = ['angry', 'mad', 'furious', 'pissed', 'upset', 'irritated', 'annoyed'];
+  const frustratedKeywords = ['frustrated', 'frustrating', 'tired of', 'sick of', 'had enough', 'done with'];
+  const negativeKeywords = ['no', 'not interested', 'don\'t want', 'can\'t', 'won\'t', 'refuse', 'reject'];
+
+  if (angryKeywords.some(kw => lowerTranscript.includes(kw))) {
+    return 'angry';
+  }
+
+  if (frustratedKeywords.some(kw => lowerTranscript.includes(kw))) {
+    return 'frustrated';
+  }
+
+  if (negativeKeywords.some(kw => lowerTranscript.includes(kw))) {
+    return 'negative';
+  }
+
+  // Positive indicators
+  const positiveKeywords = ['yes', 'sounds good', 'interested', 'great', 'perfect', 'love', 'excited'];
+  if (positiveKeywords.some(kw => lowerTranscript.includes(kw))) {
+    return 'positive';
+  }
+
+  return 'neutral';
+}
+
+/**
  * Get voice settings based on current script gate
  * - Rapport Phase (Introduction/Motivation): More expressive, human-like
  * - Closing Phase (ContractWalkthrough): More authoritative, professional
  */
-export function getVoiceSettings(currentGate?: ScriptGate | number | string): VoiceSettings {
+export function getVoiceSettings(
+  currentGate?: ScriptGate | number | string,
+  userSentiment?: 'positive' | 'neutral' | 'negative' | 'angry' | 'frustrated'
+): VoiceSettings {
   // Normalize gate input
   let gate: string | undefined;
   if (typeof currentGate === 'number') {
@@ -427,6 +492,11 @@ export function getVoiceSettings(currentGate?: ScriptGate | number | string): Vo
     gate = gateMap[currentGate];
   } else if (typeof currentGate === 'string') {
     gate = currentGate;
+  }
+
+  // If negative sentiment, override with calmly authoritative settings
+  if (userSentiment && (userSentiment === 'negative' || userSentiment === 'angry' || userSentiment === 'frustrated')) {
+    return getVoiceSettingsFromSentiment(userSentiment);
   }
 
   // Rapport Logic: Introduction or Motivation gates
@@ -488,10 +558,57 @@ export interface CentralizedAssistantConfig {
 }
 
 /**
+ * Disfluency Engine Configuration
+ * Weight: 0.15 (15% chance of disfluency injection)
+ */
+export const DISFLUENCY_WEIGHT = 0.15;
+
+/**
+ * Get disfluency injection instruction for system prompt
+ */
+function getDisfluencyInstructions(): string {
+  return `DISFLUENCY ENGINE - HUMAN-LIKE SPEECH PATTERNS:
+- You have a disfluency weight of ${DISFLUENCY_WEIGHT} (15% chance)
+- Before ANY sentence that starts a rebuttal to an objection, automatically inject a natural disfluency:
+  * "Uh, well..." (most common)
+  * "Well, you know..." (for softer objections)
+  * "Hmm, let me think about that..." (for complex objections)
+  * "Actually, you know what..." (for confident rebuttals)
+- Examples:
+  * Seller: "That price is too low." You: "Uh, well... I understand your concern, but let me explain..."
+  * Seller: "I need more time." You: "Well, you know... I hear you, and here's why timing matters..."
+  * Seller: "I don't trust investors." You: "Hmm, let me think about that... I completely understand, and here's how we're different..."
+- The disfluency should feel natural and human - not robotic
+- Use it strategically: More disfluency when handling emotional objections, less for transactional questions
+- This makes you sound like a real person thinking through their response, not a script-reading bot`;
+}
+
+/**
+ * Get dramatic pause instruction for $82,700 price point
+ */
+function getDramaticPauseInstruction(): string {
+  return `SILENCE AS A WEAPON - DRAMATIC PAUSE AFTER $82,700:
+- CRITICAL: When you say "$82,700" or "eighty-two thousand seven hundred dollars", you MUST:
+  1. Say the price with complete confidence and authority
+  2. Immediately stop talking for exactly 4.5 seconds (dramatic pause)
+  3. Do NOT speak again until the seller breaks the silence
+  4. Let the silence create psychological pressure
+  5. Wait for their response - this is a power move
+- Example:
+  * You: "Based on everything we've discussed, I can offer you $82,700 cash."
+  * [4.5 SECOND SILENCE - DO NOT SPEAK]
+  * Seller: [Will likely respond with objection, question, or acceptance]
+  * You: [Then respond based on their reaction]
+- This dramatic pause demonstrates confidence and gives the seller space to process
+- The silence is intentional and powerful - use it as a closing tool
+- If they don't respond after 4.5 seconds, you can break the silence with: "What do you think about that number?"`;
+}
+
+/**
  * Get the complete 2.0 Wholesale Script system prompt with PA Summary logic
  * This is the centralized prompt that Vapi sends to ElevenLabs
  */
-function get20WholesaleScriptSystemPrompt(propertyLocation?: string): string {
+function get20WholesaleScriptSystemPrompt(propertyLocation?: string, emotionalKeywords?: string): string {
   const locationContext = propertyLocation 
     ? ` The property is located in ${propertyLocation}. Use this location to ground any stories or examples you share.`
     : '';
@@ -552,6 +669,12 @@ GATE 6-8 (Additional gates as per script):
 
 ${getRapportContextInstructions()}
 
+${getDisfluencyInstructions()}
+
+${getDramaticPauseInstruction()}
+
+${emotionalKeywords ? emotionalKeywords : ''}
+
 PA SUMMARY LOGIC - CONTRACT WALK-THROUGH (BRIAN'S AUTHORITATIVE TONE):
 - When explaining the Purchase Agreement, always reference the exact purchase price breakdown with Brian's authoritative, professional tone:
   * "Here's the breakdown of the purchase price:
@@ -563,6 +686,8 @@ PA SUMMARY LOGIC - CONTRACT WALK-THROUGH (BRIAN'S AUTHORITATIVE TONE):
 - Use Brian's professional, authoritative voice to build trust and demonstrate expertise
 - Maintain confidence and clarity when explaining complex legal concepts
 - Reference the PA Summary naturally when walking through the contract
+
+${getDramaticPauseInstruction()}
 
 "CLINE" LEVEL RAPPORT ANCHORING - MICRO-COMMITMENT TRACKER:
 - CRITICAL: You MUST NOT move to the Purchase Agreement (contract walk-through) until you have secured at least 3 "Yeses" related to the seller's problem/motivation
@@ -641,17 +766,19 @@ export async function getCentralizedAssistantConfig(
   propertyLocation?: string,
   sellerName?: string,
   propertyAddress?: string,
-  currentGate?: ScriptGate | number | string
+  currentGate?: ScriptGate | number | string,
+  emotionalKeywords?: string,
+  userSentiment?: 'positive' | 'neutral' | 'negative' | 'angry' | 'frustrated'
 ): Promise<CentralizedAssistantConfig> {
   // Get the complete system prompt with 2.0 script and PA Summary
-  const systemPrompt = get20WholesaleScriptSystemPrompt(propertyLocation);
+  const systemPrompt = get20WholesaleScriptSystemPrompt(propertyLocation, emotionalKeywords);
 
   // Generate dynamic first message
   const firstMessage = await generateDynamicFirstMessage(userId, sellerName, propertyAddress);
 
-  // Get context-aware voice settings based on current gate
+  // Get context-aware voice settings based on current gate and sentiment
   // Default to 'Introduction' for initial call setup (rapport phase)
-  const voiceSettings = getVoiceSettings(currentGate || 'Introduction');
+  const voiceSettings = getVoiceSettings(currentGate || 'Introduction', userSentiment);
 
   // ElevenLabs Brian voice configuration with context-aware settings
   const voice = {
