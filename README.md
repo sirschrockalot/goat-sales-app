@@ -41,13 +41,23 @@ npm install
 
 3. Set up environment variables:
 ```bash
-cp .env.example .env.local
+cp env.development.example .env.development
 ```
 
-4. Add your Vapi API key to `.env.local`:
-```
+4. Add your API keys to `.env.development`:
+```bash
+# Vapi Configuration
 NEXT_PUBLIC_VAPI_API_KEY=your_vapi_api_key_here
+VAPI_SECRET_KEY=your_vapi_secret_key_here
+
+# ElevenLabs Configuration (see docs/ELEVENLABS_SETUP.md for full setup)
+ELEVEN_LABS_API_KEY=your_elevenlabs_api_key_here
+
+# OpenAI Configuration
+OPENAI_API_KEY=your_openai_api_key_here
 ```
+
+**Important**: For ElevenLabs to work, you must also configure the API key in the [Vapi Dashboard](https://dashboard.vapi.ai) → Settings → Integrations → ElevenLabs. See [docs/ELEVENLABS_SETUP.md](docs/ELEVENLABS_SETUP.md) for detailed instructions.
 
 5. Run the development server:
 ```bash

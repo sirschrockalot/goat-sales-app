@@ -10,7 +10,7 @@ import { getDispoGauntletLevel } from '@/lib/dispoGauntletLevels';
 import { getUserFromRequest } from '@/lib/getUserFromRequest';
 import type { PersonaMode } from '@/lib/vapi-client';
 import type { GauntletLevel } from '@/lib/gauntletLevels';
-import { getElevenLabsCloserConfig, getElevenLabsSellerConfig, getDeepgramSTTConfig } from '@/lib/vapiConfig';
+import { getElevenLabsCloserConfig, getElevenLabsSellerConfig, getDeepgramSTTConfig, getCentralizedAssistantConfig, getVoiceSettings, getTestStability, type ScriptGate } from '@/lib/vapiConfig';
 import { getRegionalVoiceConfig, getVoicePersonaLabel } from '@/lib/voiceRegions';
 
 export async function POST(request: NextRequest) {
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    const { difficulty, personaMode, voiceHintsEnabled, gauntletLevel, roleReversal, exitStrategy, propertyLocation } = body;
+    const { difficulty, personaMode, voiceHintsEnabled, gauntletLevel, roleReversal, exitStrategy, propertyLocation, sellerName, propertyAddress, currentGate, apexLevel, battleTestMode } = body;
 
     if (!personaMode) {
       return NextResponse.json(
@@ -86,7 +86,12 @@ export async function POST(request: NextRequest) {
           behaviors: dispoLevel.behaviors,
         };
       } else {
-        const acqLevel = getGauntletLevel(validGauntletLevel, exitStrategy);
+        // Determine apex level: battle-test > apex > standard
+        const finalApexLevel = battleTestMode === true || battleTestMode === 'true' 
+          ? 'battle-test' 
+          : (apexLevel || 'standard');
+        
+        const acqLevel = getGauntletLevel(validGauntletLevel, exitStrategy, finalApexLevel, propertyLocation);
         persona = {
           systemPrompt: acqLevel.systemPrompt,
           model: acqLevel.model,
@@ -137,6 +142,32 @@ export async function POST(request: NextRequest) {
       ? `Sales Goat ${validPersonaMode === 'disposition' ? 'Dispo' : 'Acquisition'} - Gauntlet Level ${gauntletLevel}`
       : `Sales Goat ${validPersonaMode} - Level ${difficulty}`;
 
+    // Check if we should use centralized config for Learning Mode
+    const isRoleReversal = roleReversal === true || roleReversal === 'true';
+    let useCentralizedConfig = false;
+    let centralizedConfig: Awaited<ReturnType<typeof getCentralizedAssistantConfig>> | null = null;
+
+    if (isRoleReversal && validPersonaMode === 'acquisition') {
+      // Use centralized config for Learning Mode (roleReversal)
+      // Pass currentGate for context-aware voice settings (defaults to 'Introduction' for initial setup)
+      useCentralizedConfig = true;
+      centralizedConfig = await getCentralizedAssistantConfig(
+        userId,
+        propertyLocation,
+        sellerName,
+        propertyAddress,
+        currentGate || 'Introduction' // Default to Introduction gate for initial call setup
+      );
+    }
+
+    // Get context-aware voice settings for non-centralized configs
+    // This allows all modes to benefit from phase-based voice settings
+    const voiceSettings = getVoiceSettings(currentGate || 'Introduction');
+    
+    // Get test stability value for A/B testing (randomly assigns 0.35, 0.45, or 0.55)
+    // This will be saved to the calls table to track performance
+    const testStabilityValue = getTestStability();
+
     // Create assistant via Vapi API
     const response = await fetch('https://api.vapi.ai/assistant', {
       method: 'POST',
@@ -146,29 +177,56 @@ export async function POST(request: NextRequest) {
       },
       body: JSON.stringify({
         name: assistantName,
-        model: {
-          provider: 'openai',
-          model: persona.model, // GPT-4o
-          temperature: persona.temperature,
-          messages: [
-            {
-              role: 'system',
-              content: persona.systemPrompt,
+        model: useCentralizedConfig && centralizedConfig
+          ? {
+              provider: centralizedConfig.model.provider,
+              model: centralizedConfig.model.model, // GPT-4o
+              temperature: centralizedConfig.model.temperature,
+              messages: [
+                {
+                  role: 'system',
+                  content: centralizedConfig.systemPrompt, // Full 2.0 script + PA Summary
+                },
+              ],
+            }
+          : {
+              provider: 'openai',
+              model: persona.model, // GPT-4o
+              temperature: persona.temperature,
+              messages: [
+                {
+                  role: 'system',
+                  content: persona.systemPrompt,
+                },
+              ],
             },
-          ],
-        },
         voice: (() => {
-          const isRoleReversal = roleReversal === true || roleReversal === 'true';
+          // Learning Mode (roleReversal=true): Use centralized config with test stability for A/B testing
+          if (useCentralizedConfig && centralizedConfig) {
+            return {
+              provider: centralizedConfig.voice.provider,
+              voiceId: centralizedConfig.voice.voiceId, // nPczCjzI2devNBz1zWls (Brian)
+              model: centralizedConfig.voice.model,
+              stability: testStabilityValue, // Use test stability for A/B testing (overrides context-aware)
+              similarityBoost: centralizedConfig.voice.similarityBoost, // 0.8
+              ...(centralizedConfig.voice.style !== undefined && {
+                style: centralizedConfig.voice.style, // Context-aware: 0.15 (rapport) or 0.05 (contract)
+              }),
+            };
+          }
           
-          // Learning Mode (roleReversal=true): AI is acquisition agent, use Brian - Professional Closer
+          // Learning Mode (roleReversal=true): AI is acquisition agent, use Brian - Professional Closer with test stability
           if (isRoleReversal && validPersonaMode === 'acquisition') {
             const closerConfig = getElevenLabsCloserConfig();
             return {
               provider: closerConfig.provider,
               voiceId: closerConfig.voiceId,
               model: closerConfig.model,
-              stability: closerConfig.stability,
+              stability: testStabilityValue, // Use test stability for A/B testing
               similarityBoost: closerConfig.similarityBoost,
+              ...(voiceSettings.style !== undefined && {
+                style: voiceSettings.style, // Context-aware style
+              }),
             };
           }
           
@@ -179,7 +237,7 @@ export async function POST(request: NextRequest) {
               provider: 'elevenlabs',
               voiceId: regionalConfig.voiceId,
               model: 'eleven_turbo_v2_5',
-              stability: regionalConfig.stability,
+              stability: testStabilityValue, // Use test stability for A/B testing
               similarityBoost: regionalConfig.similarityBoost || 0.75,
               // Note: speed is not directly supported in Vapi voice config, but can be adjusted via SSML
             };
@@ -192,7 +250,7 @@ export async function POST(request: NextRequest) {
               provider: sellerConfig.provider,
               voiceId: sellerConfig.voiceId,
               model: sellerConfig.model,
-              stability: sellerConfig.stability,
+              stability: testStabilityValue, // Use test stability for A/B testing
               similarityBoost: sellerConfig.similarityBoost,
             };
           }
@@ -204,7 +262,7 @@ export async function POST(request: NextRequest) {
               provider: 'elevenlabs',
               voiceId: regionalConfig.voiceId,
               model: 'eleven_turbo_v2_5',
-              stability: regionalConfig.stability,
+              stability: testStabilityValue, // Use test stability for A/B testing
               similarityBoost: regionalConfig.similarityBoost || 0.75,
             };
           }
@@ -216,18 +274,16 @@ export async function POST(request: NextRequest) {
               provider: sellerConfig.provider,
               voiceId: sellerConfig.voiceId,
               model: sellerConfig.model,
-              stability: sellerConfig.stability,
+              stability: testStabilityValue, // Use test stability for A/B testing
               similarityBoost: sellerConfig.similarityBoost,
             };
           }
           
-          // Default: Use persona voice with stability if provided
+          // Default: Use persona voice with test stability for A/B testing
           return {
             provider: '11labs',
             voiceId: persona.voice,
-            ...(persona.voiceStability !== undefined && {
-              stability: persona.voiceStability,
-            }),
+            stability: testStabilityValue, // Use test stability for A/B testing
           };
         })(),
         // Configure Deepgram STT for fast transcription (250ms endpointing)
@@ -239,7 +295,9 @@ export async function POST(request: NextRequest) {
             endpointing: deepgramConfig.endpointing,
           };
         })(),
-        firstMessage: persona.firstMessage || 'Hello, how can I help you today?',
+        firstMessage: useCentralizedConfig && centralizedConfig
+          ? centralizedConfig.firstMessage // Dynamic firstMessage with seller name and property address
+          : persona.firstMessage || 'Hello, how can I help you today?',
         maxDurationSeconds: persona.maxDuration || 600,
         // Enable fillers and backchanneling for more human-like conversation
         // Note: These properties are configured via the Vapi SDK on the client-side, not in the assistant creation API
@@ -265,6 +323,7 @@ export async function POST(request: NextRequest) {
             propertyLocation,
             voicePersona: getVoicePersonaLabel(propertyLocation), // Store voice persona label for HUD
           }),
+          testStabilityValue: testStabilityValue, // Save test stability for A/B testing analysis
         },
       }),
     });

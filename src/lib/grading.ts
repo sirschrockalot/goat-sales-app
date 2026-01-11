@@ -109,6 +109,31 @@ interface GradingResult {
       };
     };
   };
+  neuralCoaching?: {
+    strategicDiscovery: {
+      score: number; // 0-100
+      surfaceLevelQuestions: number;
+      strategicBusinessQuestions: number;
+      motivationTriggersDetected: string[];
+      motivationTriggersMissed: string[];
+      elliottCorrections: string[];
+      feedback: string;
+    };
+    discProfile: {
+      type: 'driver' | 'amiable' | 'expressive' | 'analytical';
+      confidence: number; // 0-100
+      indicators: string[];
+    };
+    eqMetrics: {
+      talkTimePercentage: number;
+      dominanceError: boolean;
+      activeListeningScore: number;
+      rapportScore: number; // Penalized if dominanceError
+      tonalityScore: number;
+      sentimentAlignment: number;
+      feedback: string;
+    };
+  };
   logicGates: {
     intro: 'pass' | 'fail';
     motivation: 'found' | 'missed';
@@ -122,7 +147,9 @@ interface GradingResult {
   };
 }
 
-const JUDGE_PROMPT = `Act as a Sales Manager specializing in the Eric Cline Sales Goat method. Analyze the transcript for these 5 gates:
+const JUDGE_PROMPT = `Act as a Sales Manager specializing in the Eric Cline Sales Goat method and Andy Elliott's high-pressure training. You are a "Dual-Agent": an elite closer during sessions and a diagnostic mentor analyzing rep performance against the "Gold Standard" of Eric Cline and Andy Elliott.
+
+Analyze the transcript for these 5 gates:
 
 1. **The Intro (Pass/Fail):** Did they say 'Approval or Denial'? 
 2. **The Why (Found/Missed):** Did they identify the seller's deep motivation?
@@ -284,6 +311,75 @@ STRICT RULE: The rep MUST place the seller on hold before changing the price. Li
 - Add "Spread Expert" score (0-10) as bonus points to goatScore
 - Add "Strategy Pivot" score (0-10) as bonus points to goatScore
 
+**NEURAL COACHING - STRATEGIC DISCOVERY QUALITY SCORING:**
+Instead of just checking if questions were asked, evaluate if the rep moved from "Surface-Level" (beds/baths, square footage, basic property info) to "Strategic Business Conversations" (foreclosure impact, tax debt, equity goals, financial pressure points).
+
+1. **Surface-Level Questions:** Count questions about:
+   - Bedrooms, bathrooms, square footage, lot size
+   - Basic property condition (roof age, HVAC age, foundation)
+   - These are necessary but NOT sufficient
+
+2. **Strategic Business Questions:** Count questions about:
+   - Foreclosure risk, mortgage payments, bank deadlines
+   - Tax debt, liens, IRS issues
+   - Equity goals, walk-away amount, net after closing
+   - Divorce, probate, inheritance, job loss
+   - Urgency, deadlines, time constraints
+   - The "Hidden Why" - emotional/financial drivers
+
+3. **Discovery Quality Score (0-100):**
+   - Calculate ratio: Strategic Business Questions / (Surface-Level + Strategic Business Questions)
+   - 80-100: Excellent (moved from surface to strategic effectively)
+   - 60-79: Good (some strategic questions, but could dig deeper)
+   - 40-59: Fair (too much time on surface-level)
+   - 0-39: Poor (stayed at surface-level, never moved to strategic)
+
+4. **Motivation Trigger Detection:**
+   - Identify if the seller mentioned pain points: foreclosure, tax debt, divorce, probate, job loss, relocation urgency, property burden, equity need
+   - For each trigger mentioned, check if the rep dug deeper (asked follow-up questions like "When did that start?", "How much do you owe?", "What's the deadline?")
+   - If a trigger was mentioned but NOT explored: This is a MISSED OPPORTUNITY
+
+5. **Elliott-Style Corrections:**
+   - If the rep missed a motivation trigger, provide a direct correction:
+     * "You just walked right past their [trigger name] pain point. Why didn't you dig into that? You heard them mention it, but you didn't ask 'When did that start?' or 'How much do you owe?' or 'What's the deadline?' You need to go DEEP, not just acknowledge it and move on."
+   - These corrections should be included in the feedback
+
+**NEURAL COACHING - DISC PERSONALITY DETECTION:**
+Analyze the rep's language patterns to identify their DISC personality type:
+- **Driver (High-D):** Direct, decisive, results-oriented ("let's", "we need", "now", "decision", "goal")
+- **Amiable:** Relationship-focused, cooperative ("I understand", "together", "for you", "no rush")
+- **Expressive:** Enthusiastic, animated ("excited", "amazing", "I love", "story")
+- **Analytical:** Detail-oriented, systematic ("data", "numbers", "how", "why", "explain", "verify")
+
+Include the detected DISC type and confidence level in the neuralCoaching section.
+
+**NEURAL COACHING - EMOTIONAL INTELLIGENCE (EQ) TRACKING:**
+Evaluate the rep's emotional intelligence using speech and sentiment analysis:
+
+1. **Talk-Time Analysis:**
+   - Calculate rep's talk time as percentage of total call duration
+   - If rep talked >60% of the call: This is a "DOMINANCE ERROR"
+   - The seller should be talking 60%+ of the time
+   - Penalize rapport score heavily if dominance error detected
+
+2. **Active Listening Score (0-100):**
+   - Count active listening indicators: "mhm", "uh-huh", "I see", "I understand", "tell me more"
+   - More indicators = higher score
+   - Heavy penalty (-30 points) if dominance error
+
+3. **Rapport Score (0-100):**
+   - Base score: 70
+   - If dominance error: -40 points (rapport destroyed)
+   - If talk-time 40-60%: +15 points (good balance)
+   - If talk-time <40%: +20 points (excellent listening)
+
+4. **Tonality & Sentiment Alignment:**
+   - Evaluate if rep matched AI's emotional state
+   - Did rep adjust tone based on AI's sentiment?
+   - Score 0-100
+
+Include EQ metrics in the neuralCoaching section with specific feedback on dominance errors.
+
 **Output Format:** Return a JSON object with:
 - goatScore: [0-100]
 - feedback: [2-3 sentences of blunt coaching]
@@ -398,7 +494,15 @@ STRICT RULE: The rep MUST place the seller on hold before changing the price. Li
 
 Be strict. Only give high scores if all gates are passed.`;
 
-export async function gradeCall(transcript: string, roleReversal?: boolean): Promise<GradingResult> {
+export async function gradeCall(
+  transcript: string, 
+  userId?: string, 
+  callId?: string, 
+  gauntletLevel?: number,
+  roleReversal?: boolean,
+  callDuration?: number,
+  repTalkTime?: number
+): Promise<GradingResult> {
   try {
     // Add learning mode context to the prompt if roleReversal is true
     const promptContext = roleReversal 
@@ -595,6 +699,42 @@ export async function gradeCall(transcript: string, roleReversal?: boolean): Pro
         const trustBreachPenalty = 20; // -20 points for trust breach
         result.goatScore = Math.max(0, result.goatScore - trustBreachPenalty);
       }
+    }
+
+    // Add Neural Coaching metrics
+    result.neuralCoaching = {
+      strategicDiscovery: discoveryQuality,
+      discProfile: discProfile,
+      eqMetrics: eqMetrics,
+    };
+    
+    // Apply penalties/bonuses based on neural coaching
+    // Penalty for low discovery quality
+    if (discoveryQuality.score < 60) {
+      const discoveryPenalty = Math.round((60 - discoveryQuality.score) * 0.5); // Up to -20 points
+      result.goatScore = Math.max(0, result.goatScore - discoveryPenalty);
+    }
+    
+    // Penalty for dominance error (talk-time > 60%)
+    if (eqMetrics.dominanceError) {
+      const dominancePenalty = 25; // -25 points for dominance error
+      result.goatScore = Math.max(0, result.goatScore - dominancePenalty);
+    }
+    
+    // Bonus for high discovery quality
+    if (discoveryQuality.score >= 80) {
+      const discoveryBonus = 10; // +10 points for excellent discovery
+      result.goatScore = Math.min(100, result.goatScore + discoveryBonus);
+    }
+    
+    // Add Elliott corrections to feedback if any were detected
+    if (discoveryQuality.elliottCorrections.length > 0) {
+      result.feedback = `${result.feedback}\n\nELLIOTT CORRECTIONS:\n${discoveryQuality.elliottCorrections.join('\n')}`;
+    }
+    
+    // Add EQ feedback if dominance error
+    if (eqMetrics.dominanceError) {
+      result.feedback = `${result.feedback}\n\n${eqMetrics.feedback}`;
     }
 
     return result;

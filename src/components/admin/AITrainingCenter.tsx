@@ -7,7 +7,7 @@
 
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Brain, Zap, AlertCircle, CheckCircle2, Clock, TrendingDown, TrendingUp } from 'lucide-react';
+import { Brain, Zap, AlertCircle, CheckCircle2, Clock, TrendingDown, TrendingUp, BarChart3, Settings } from 'lucide-react';
 
 interface AIOptimization {
   id: string;
@@ -23,15 +23,69 @@ interface AIOptimization {
   created_at: string;
 }
 
+interface VoicePerformanceLog {
+  stability_setting: number;
+  avg_humanity_score: number;
+  conversion_rate: number;
+  sample_size: number;
+  high_performing: boolean;
+}
+
 export default function AITrainingCenter() {
   const [optimizations, setOptimizations] = useState<AIOptimization[]>([]);
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'unapplied' | 'high'>('all');
+  const [voicePerformance, setVoicePerformance] = useState<{
+    logs: VoicePerformanceLog[];
+    optimalStability: number | null;
+  } | null>(null);
+  const [autoOptimize, setAutoOptimize] = useState(false);
+  const [loadingPerformance, setLoadingPerformance] = useState(true);
 
   useEffect(() => {
     fetchOptimizations();
+    fetchVoicePerformance();
   }, [filter]);
+
+  const fetchVoicePerformance = async () => {
+    try {
+      setLoadingPerformance(true);
+      const response = await fetch('/api/admin/voice-performance');
+      if (response.ok) {
+        const data = await response.json();
+        setVoicePerformance(data);
+      }
+    } catch (error) {
+      console.error('Error fetching voice performance:', error);
+    } finally {
+      setLoadingPerformance(false);
+    }
+  };
+
+  const toggleAutoOptimize = async (enabled: boolean) => {
+    try {
+      const response = await fetch('/api/admin/voice-performance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ autoOptimize: enabled }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setAutoOptimize(enabled);
+        if (enabled && data.optimalStability) {
+          alert(`Auto-Optimize enabled! Optimal stability set to ${data.optimalStability}`);
+        }
+      } else {
+        const error = await response.json();
+        alert(`Failed to update auto-optimize: ${error.error}`);
+      }
+    } catch (error) {
+      console.error('Error toggling auto-optimize:', error);
+      alert('Failed to update auto-optimize');
+    }
+  };
 
   const fetchOptimizations = async () => {
     try {
@@ -175,6 +229,146 @@ export default function AITrainingCenter() {
             {avgHumanityScore}/100
           </div>
         </motion.div>
+      </div>
+
+      {/* Voice Performance Testing Section */}
+      <div className="rounded-xl p-6 border border-white/10 bg-white/5">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+              <BarChart3 className="w-5 h-5 text-blue-400" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-white">Voice Stability Testing</h3>
+              <p className="text-sm text-gray-400">A/B Testing for Optimal ElevenLabs Settings</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-400">Auto-Optimize</span>
+              <button
+                onClick={() => toggleAutoOptimize(!autoOptimize)}
+                className={`relative w-12 h-6 rounded-full transition-all ${
+                  autoOptimize ? 'bg-[#22C55E]' : 'bg-gray-600'
+                }`}
+              >
+                <div
+                  className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                    autoOptimize ? 'translate-x-6' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+            {voicePerformance?.optimalStability && (
+              <div className="text-sm">
+                <span className="text-gray-400">Optimal: </span>
+                <span className="text-[#22C55E] font-semibold">{voicePerformance.optimalStability}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {loadingPerformance ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : voicePerformance && voicePerformance.logs.length > 0 ? (
+          <div className="space-y-4">
+            {/* Bar Chart */}
+            <div className="space-y-2">
+              <h4 className="text-sm font-semibold text-gray-300">Stability vs. Conversion Rate</h4>
+              <div className="flex items-end gap-4 h-48">
+                {voicePerformance.logs.map((log) => {
+                  const maxConversion = Math.max(...voicePerformance.logs.map(l => l.conversion_rate || 0));
+                  const barHeight = maxConversion > 0 ? ((log.conversion_rate || 0) / maxConversion) * 100 : 0;
+                  const isOptimal = voicePerformance.optimalStability === log.stability_setting;
+                  
+                  return (
+                    <div key={log.stability_setting} className="flex-1 flex flex-col items-center gap-2">
+                      <div className="relative w-full h-full flex items-end">
+                        <motion.div
+                          initial={{ height: 0 }}
+                          animate={{ height: `${barHeight}%` }}
+                          transition={{ duration: 0.5, delay: 0.1 }}
+                          className={`w-full rounded-t-lg ${
+                            isOptimal
+                              ? 'bg-[#22C55E] border-2 border-[#22C55E]'
+                              : 'bg-blue-500/50 border border-blue-400/50'
+                          }`}
+                          style={{ minHeight: '20px' }}
+                        />
+                      </div>
+                      <div className="text-center">
+                        <div className={`text-sm font-semibold ${isOptimal ? 'text-[#22C55E]' : 'text-white'}`}>
+                          {log.stability_setting}
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          {log.conversion_rate?.toFixed(1) || 0}%
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          n={log.sample_size}
+                        </div>
+                        {log.high_performing && (
+                          <div className="text-xs text-[#22C55E] mt-1">⭐ High Performer</div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Performance Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-white/10">
+                    <th className="text-left py-2 text-gray-400">Stability</th>
+                    <th className="text-left py-2 text-gray-400">Avg. Humanity</th>
+                    <th className="text-left py-2 text-gray-400">Conversion Rate</th>
+                    <th className="text-left py-2 text-gray-400">Sample Size</th>
+                    <th className="text-left py-2 text-gray-400">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {voicePerformance.logs.map((log) => {
+                    const isOptimal = voicePerformance.optimalStability === log.stability_setting;
+                    return (
+                      <tr key={log.stability_setting} className="border-b border-white/5">
+                        <td className={`py-3 font-semibold ${isOptimal ? 'text-[#22C55E]' : 'text-white'}`}>
+                          {log.stability_setting}
+                          {isOptimal && <span className="ml-2 text-xs">(Optimal)</span>}
+                        </td>
+                        <td className="py-3 text-gray-300">
+                          {log.avg_humanity_score?.toFixed(1) || 'N/A'}
+                        </td>
+                        <td className="py-3 text-gray-300">
+                          {log.conversion_rate?.toFixed(1) || 0}%
+                        </td>
+                        <td className="py-3 text-gray-400">{log.sample_size}</td>
+                        <td className="py-3">
+                          {log.high_performing ? (
+                            <span className="px-2 py-1 rounded-full text-xs bg-[#22C55E]/20 text-[#22C55E] border border-[#22C55E]/50">
+                              High Performer
+                            </span>
+                          ) : (
+                            <span className="text-gray-500 text-xs">Testing</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-8 text-gray-400">
+            <BarChart3 className="w-12 h-12 mx-auto mb-4 opacity-50" />
+            <p>No voice performance data yet</p>
+            <p className="text-sm mt-2">Data will appear as calls are completed with test stability values</p>
+          </div>
+        )}
       </div>
 
       {/* Filters */}

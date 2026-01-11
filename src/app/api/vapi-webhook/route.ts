@@ -8,6 +8,7 @@ import { gradeCall } from '@/lib/grading';
 import { gradeDispoCall } from '@/lib/dispoGrading';
 import { analyzeDeviation } from '@/lib/analyzeDeviation';
 import { analyzeSentiment } from '@/lib/analyzeSentiment';
+import { analyzeVoicePerformance } from '@/lib/voicePerformance';
 import { supabaseAdmin } from '@/lib/supabase';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
 import { getUserFromRequest } from '@/lib/getUserFromRequest';
@@ -254,9 +255,28 @@ export async function POST(request: NextRequest) {
       // Get exit strategy from metadata if available
       const exitStrategy = (call.metadata as any)?.exitStrategy || 'fix_and_flip';
       
+      // Calculate rep talk time from transcript (estimate based on transcript length and call duration)
+      // This is an approximation - in production, you'd track this from Vapi SDK events
+      const callDurationSeconds = callDuration || (transcript.length > 0 ? Math.ceil(transcript.length / 10) : 0); // Rough estimate: 10 chars per second
+      const repTranscript = transcript.split('\n').filter(line => 
+        line.toLowerCase().includes('rep:') || 
+        line.toLowerCase().includes('user:') ||
+        (!line.toLowerCase().includes('ai:') && !line.toLowerCase().includes('seller:'))
+      ).join(' ');
+      const repTalkTimeSeconds = repTranscript.length > 0 ? Math.ceil(repTranscript.length / 10) : Math.ceil(callDurationSeconds * 0.5); // Estimate 50% if no clear markers
+      
+      // Grade the call with neural coaching metrics
       const gradingResult = personaMode === 'disposition' 
-        ? await gradeDispoCall(transcript)
-        : await gradeCall(transcript, roleReversal);
+        ? await gradeDispoCall(transcript, userId, callId, gauntletLevel)
+        : await gradeCall(
+            transcript, 
+            userId, 
+            callId, 
+            gauntletLevel, 
+            roleReversal,
+            callDurationSeconds,
+            repTalkTimeSeconds
+          );
 
       // Calculate logic gates array for database based on mode
       const logicGates = personaMode === 'disposition' ? [
@@ -403,6 +423,7 @@ export async function POST(request: NextRequest) {
             suggested_buy_price: gradingResult.dealTracking?.suggestedBuyPrice || null,
             final_offer_price: gradingResult.dealTracking?.finalOfferPrice || null,
             price_variance: gradingResult.dealTracking?.priceVariance || null,
+            test_stability_value: call.metadata?.testStabilityValue || null, // Save test stability for A/B testing
             metadata: {
               ...(gauntletLevel ? { gauntlet_level: gauntletLevel } : {}),
               callDuration,
@@ -452,6 +473,19 @@ export async function POST(request: NextRequest) {
           console.error('Error updating optimization call_id:', error);
         }
       }
+    }
+
+    // Analyze voice performance for A/B testing (runs asynchronously)
+    // This correlates test_stability_value with Humanity Score and Contract Signed
+    if (data.test_stability_value) {
+      analyzeVoicePerformance(
+        data.test_stability_value,
+        sentimentAnalysis?.humanityScore || null,
+        data.contract_signed || false,
+        data.final_offer_price || null
+      ).catch(err => {
+        console.error('Error analyzing voice performance:', err);
+      });
     }
 
     return NextResponse.json({
