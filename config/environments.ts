@@ -60,9 +60,10 @@ export function getEnvironmentConfig(): EnvironmentConfig {
 
   // Sandbox/Development configuration
   // Use SANDBOX_ prefixed env vars if available, otherwise fall back to regular vars
+  // Also support SUPABASE_SANDBOX_URL for cloud deployments
   return {
     supabase: {
-      url: process.env.SANDBOX_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+      url: process.env.SUPABASE_SANDBOX_URL || process.env.SANDBOX_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '',
       serviceRoleKey: process.env.SANDBOX_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '',
       anonKey: process.env.SANDBOX_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
     },

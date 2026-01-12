@@ -12,6 +12,8 @@ import { analyzeVoicePerformance } from '@/lib/voicePerformance';
 import { supabaseAdmin } from '@/lib/supabase';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
 import { getUserFromRequest } from '@/lib/getUserFromRequest';
+import { processCallCompletion } from '@/lib/callActions';
+import { processEscalation } from '@/lib/escalationService';
 import logger from '@/lib/logger';
 
 interface VapiWebhookPayload {
@@ -261,7 +263,30 @@ export async function POST(request: NextRequest) {
 
     // Grade the call using appropriate grading function (pass roleReversal for Learning Mode)
       // Get exit strategy from metadata if available
-      const exitStrategy = (call.metadata as any)?.exitStrategy || 'fix_and_flip';
+      // Extract exit strategy from metadata or determine from transcript
+      let exitStrategy = (call.metadata as any)?.exitStrategy || 'fix_and_flip';
+      
+      // Try to extract exit strategy from transcript if not in metadata
+      if (!exitStrategy || exitStrategy === 'fix_and_flip') {
+        const lowerTranscript = transcript.toLowerCase();
+        if (lowerTranscript.includes('subject to') || lowerTranscript.includes('subject-to') || lowerTranscript.includes('sub-to')) {
+          exitStrategy = 'subject_to';
+        } else if (lowerTranscript.includes('seller finance') || lowerTranscript.includes('seller financing') || lowerTranscript.includes('seller carry')) {
+          exitStrategy = 'seller_finance';
+        } else if (lowerTranscript.includes('creative finance') || lowerTranscript.includes('creative financing')) {
+          exitStrategy = 'creative_finance';
+        } else if (lowerTranscript.includes('buy and hold') || lowerTranscript.includes('rental')) {
+          exitStrategy = 'buy_and_hold';
+        } else if (lowerTranscript.includes('cash') || lowerTranscript.includes('cash offer')) {
+          exitStrategy = 'cash';
+        }
+      }
+      
+      // Normalize exit strategy values for database
+      const normalizedExitStrategy = exitStrategy
+        .replace(/-/g, '_')
+        .replace('sub_to', 'subject_to')
+        .replace('seller_carry', 'seller_finance');
       
       // Calculate rep talk time from transcript (estimate based on transcript length and call duration)
       // This is an approximation - in production, you'd track this from Vapi SDK events
@@ -428,6 +453,7 @@ export async function POST(request: NextRequest) {
             final_offer_price: gradingResult.dealTracking?.finalOfferPrice || null,
             price_variance: gradingResult.dealTracking?.priceVariance || null,
             test_stability_value: call.metadata?.testStabilityValue || null, // Save test stability for A/B testing
+            exit_strategy_chosen: normalizedExitStrategy || null, // Store exit strategy for auditing "Top Earner" decision-making
             metadata: {
               ...(gauntletLevel ? { gauntlet_level: gauntletLevel } : {}),
               callDuration,
@@ -464,6 +490,72 @@ export async function POST(request: NextRequest) {
         },
         { status: 500 }
       );
+    }
+
+    // Process call completion: detect commitment and trigger contract if needed
+    try {
+      const propertyAddress = call.metadata?.propertyAddress || transcript.match(/address[:\s]+([^\n]+)/i)?.[1] || 'Unknown';
+      const sellerName = call.metadata?.sellerName || transcript.match(/(?:hi|hello|this is)\s+([A-Z][a-z]+\s+[A-Z][a-z]+)/i)?.[1] || 'Seller';
+      const sellerEmail = call.metadata?.sellerEmail || null;
+      const offerPrice = gradingResult.dealTracking?.finalOfferPrice || gradingResult.dealTracking?.suggestedBuyPrice || null;
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      const transcriptUrl = `${appUrl}/calls/${data.id}`;
+
+      // Extract ARV and repairs from transcript or metadata
+      const estimatedARV = call.metadata?.estimatedARV || call.metadata?.arv || null;
+      const estimatedRepairs = call.metadata?.estimatedRepairs || call.metadata?.repairs || null;
+
+      // Process standard call completion (contract generation)
+      const callActions = await processCallCompletion(
+        call.id,
+        transcript,
+        propertyAddress,
+        sellerName,
+        sellerEmail || undefined,
+        offerPrice || undefined,
+        normalizedExitStrategy || undefined,
+        {
+          callId: call.id,
+          userId: userId,
+          contractSigned: gradingResult.dealTracking?.contractSigned || false,
+        }
+      );
+
+      // Process escalation for high-margin deals ($15k+ spread)
+      if (callActions.commitmentDetected && offerPrice && sellerEmail) {
+        const escalationResult = await processEscalation(
+          call.id,
+          transcript,
+          propertyAddress,
+          sellerName,
+          sellerEmail,
+          offerPrice,
+          normalizedExitStrategy || 'cash',
+          estimatedARV || undefined,
+          estimatedRepairs || undefined,
+          transcriptUrl
+        );
+
+        if (escalationResult.smsSent || escalationResult.contractSent) {
+          logger.info('Escalation processed', {
+            callId: call.id,
+            smsSent: escalationResult.smsSent,
+            contractSent: escalationResult.contractSent,
+            contractUrl: escalationResult.contractUrl,
+          });
+        }
+      }
+
+      if (callActions.commitmentDetected) {
+        logger.info('Commitment detected in call', {
+          callId: call.id,
+          contractTriggered: callActions.contractTriggered,
+          contractUrl: callActions.contractUrl,
+        });
+      }
+    } catch (actionError) {
+      logger.error('Error processing call actions', { error: actionError, callId: call.id });
+      // Don't fail the webhook if action processing fails
     }
 
     // Update optimizations with call_id now that we have it

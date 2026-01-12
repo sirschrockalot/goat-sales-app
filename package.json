@@ -49,7 +49,9 @@
     "sandbox:golden-samples": "tsx scripts/goldenSamples.ts",
     "sandbox:audit-vocal-soul": "tsx scripts/vocalSoulAuditor.ts",
     "scout:start": "tsx scripts/startTacticalScout.ts",
-    "scout:scan": "tsx scripts/scanBreakthroughs.ts"
+    "scout:scan": "tsx scripts/scanBreakthroughs.ts",
+    "audit:daily": "tsx scripts/dailyAuditor.ts",
+    "research:pre-call": "tsx scripts/preCallResearch.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.90.1",

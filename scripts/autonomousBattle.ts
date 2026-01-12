@@ -9,6 +9,13 @@ import { getEnvironmentConfig, assertSandboxMode, validateEnvironmentConfig } fr
 import logger from '../src/lib/logger';
 import { injectTextures, getTextureInjectionProbability } from '../src/lib/acousticTextures';
 import { generateCoTReasoning, formatCoTAsThinking, stripThinkingTags } from '../src/lib/chainOfThought';
+import {
+  checkBudget,
+  shouldThrottle,
+  calculateOpenAICost,
+  logCost,
+  CostBreakdown,
+} from '../src/lib/budgetMonitor';
 import * as fs from 'fs-extra';
 import * as path from 'path';
 
@@ -163,7 +170,9 @@ async function executeTurn(
   battleState: BattleState,
   personaPrompt: string,
   isCloserTurn: boolean,
-  temperature: number = 0.7
+  temperature: number = 0.7,
+  battleId?: string,
+  personaId?: string
 ): Promise<{ message: string; tokens: { input: number; output: number } }> {
   const systemPrompt = isCloserTurn
     ? await getApexCloserPrompt()
@@ -215,9 +224,12 @@ async function executeTurn(
     }
   }
 
+  // Always use GPT-4o-Mini for battles (cost-effective)
+  const modelToUse = 'gpt-4o-mini';
+
   // Call GPT-4o-Mini for the battle
   const completion = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: modelToUse,
     messages: apiMessages,
     temperature: temperature,
   });
@@ -225,6 +237,24 @@ async function executeTurn(
   let response = completion.choices[0]?.message?.content || '';
   const inputTokens = completion.usage?.prompt_tokens || 0;
   const outputTokens = completion.usage?.completion_tokens || 0;
+
+  // Calculate and log cost for this turn
+  const turnCost = calculateOpenAICost('gpt-4o-mini', inputTokens, outputTokens);
+  await logCost(
+    {
+      provider: 'openai',
+      model: 'gpt-4o-mini',
+      inputTokens,
+      outputTokens,
+      cost: turnCost,
+    },
+    {
+      battleTurn: battleState.turn,
+      isCloserTurn,
+      battleId,
+      personaId,
+    }
+  );
 
   // For closer turns: Apply CoT reasoning and inject textures
   if (isCloserTurn) {
@@ -274,9 +304,9 @@ async function executeTurn(
 }
 
 /**
- * Referee: Grade the battle using GPT-4o
+ * Referee: Grade the battle using GPT-4o (or GPT-4o-Mini if throttled)
  */
-async function refereeBattle(transcript: string): Promise<RefereeScore> {
+async function refereeBattle(transcript: string, isThrottled: boolean = false): Promise<RefereeScore> {
   const refereePrompt = `You are an Elite Sales Referee grading an autonomous battle between an Apex Closer and a Seller Persona.
 
 TRANSCRIPT:
@@ -313,8 +343,11 @@ Return a JSON object with:
   "winningRebuttal": "<the specific rebuttal that won the battle, if any>"
 }`;
 
+  // Use GPT-4o-Mini if throttled (within 20% of budget)
+  const refereeModel = isThrottled ? 'gpt-4o-mini' : 'gpt-4o';
+
   const completion = await openai.chat.completions.create({
-    model: 'gpt-4o',
+    model: refereeModel,
     messages: [
       { role: 'system', content: 'You are an Elite Sales Referee. Return valid JSON only.' },
       { role: 'user', content: refereePrompt },
@@ -322,6 +355,29 @@ Return a JSON object with:
     response_format: { type: 'json_object' },
     temperature: 0.3,
   });
+
+  // Calculate and log referee cost
+  const refereeInputTokens = completion.usage?.prompt_tokens || 0;
+  const refereeOutputTokens = completion.usage?.completion_tokens || 0;
+  const refereeCost = calculateOpenAICost(
+    refereeModel as 'gpt-4o-mini' | 'gpt-4o',
+    refereeInputTokens,
+    refereeOutputTokens
+  );
+  
+  await logCost(
+    {
+      provider: 'openai',
+      model: refereeModel,
+      inputTokens: refereeInputTokens,
+      outputTokens: refereeOutputTokens,
+      cost: refereeCost,
+    },
+    {
+      type: 'referee',
+      transcriptLength: transcript.length,
+    }
+  );
 
   const response = completion.choices[0]?.message?.content;
   if (!response) {
@@ -351,6 +407,15 @@ async function runBattle(
   const config = getEnvironmentConfig();
   validateEnvironmentConfig(config);
   assertSandboxMode(config);
+
+  // Check budget before starting battle
+  await checkBudget();
+
+  // Check if throttling is active (within 20% of limit)
+  const isThrottled = await shouldThrottle();
+  if (isThrottled) {
+    logger.warn('Budget throttling active - using GPT-4o-Mini only and disabling Vocal Soul Auditor');
+  }
 
   if (!supabaseAdmin) {
     throw new Error('Supabase admin client not available');
@@ -397,7 +462,9 @@ async function runBattle(
         battleState,
         persona.system_prompt,
         isCloserTurn,
-        battleTemperature
+        battleTemperature,
+        undefined, // battleId not available yet
+        personaId
       );
 
       // Update state
@@ -431,17 +498,14 @@ async function runBattle(
   // Get referee score
   const transcript = battleState.transcript.join('\n\n');
   logger.info('Battle complete, getting referee score...');
-  const score = await refereeBattle(transcript);
+  
+  // Check throttling status for referee
+  const isThrottledForReferee = await shouldThrottle();
+  const score = await refereeBattle(transcript, isThrottledForReferee);
 
-  // Calculate referee cost
-  const refereeTokens = {
-    input: 0,
-    output: 0,
-  };
-  // Note: We'd need to track referee tokens separately, but for simplicity we'll estimate
-  const estimatedRefereeCost = 0.05; // Rough estimate for referee call
-  battleState.costUsd += estimatedRefereeCost;
-  checkKillSwitch(battleState.costUsd);
+  // Referee cost is now calculated and logged in refereeBattle function
+  // Update battleState.costUsd with actual costs from turns (already logged)
+  // Note: Referee cost is logged separately in refereeBattle function
 
   // Save battle to database
   const { data: battle, error: battleError } = await supabaseAdmin
@@ -478,10 +542,12 @@ async function runBattle(
   });
 
   // Auto-audit vocal soul if audio file is available
+  // Note: Disabled if throttling is active (within 20% of budget)
   // Note: In production, you'd pass the audio file path
   // For now, we'll audit based on transcript
-  if (score.totalScore > 70) {
-    // Only audit high-scoring battles to save costs
+  const isThrottledForAudit = await shouldThrottle();
+  if (score.totalScore > 70 && !isThrottledForAudit) {
+    // Only audit high-scoring battles to save costs, and skip if throttled
     try {
       // Import vocal soul auditor
       const { auditVocalSoul, checkAndInjectFeedback } = await import('./vocalSoulAuditor');
@@ -501,21 +567,56 @@ async function runBattle(
       logger.warn('Error in vocal soul audit', { battleId: battle.id, error });
       // Don't fail the battle if audit fails
     }
+  } else if (isThrottledForAudit) {
+    logger.info('Vocal Soul Auditor disabled due to budget throttling', {
+      battleId: battle.id,
+      score: score.totalScore,
+    });
   }
+
+  // Calculate total cost from battleState (sum of all turn costs)
+  // Referee cost is logged separately in refereeBattle function
+  const totalCost = battleState.costUsd;
+
+  // Log final battle cost summary
+  await logCost(
+    {
+      provider: 'openai',
+      model: 'gpt-4o-mini',
+      inputTokens: battleState.tokenUsage.input,
+      outputTokens: battleState.tokenUsage.output,
+      cost: totalCost,
+    },
+    {
+      type: 'battle_summary',
+      battleId: battle.id,
+      personaId: personaId,
+      turns: battleState.turn,
+      score: score.totalScore,
+    }
+  );
 
   return {
     battleId: battle.id,
     score,
     transcript,
     tokenUsage: battleState.tokenUsage.total,
-    cost: battleState.costUsd,
+    cost: totalCost,
   };
 }
 
 /**
- * Run battles against multiple personas
+ * Run battles against multiple personas with concurrency control
  */
-async function runBattleLoop(personaIds?: string[], maxBattles?: number) {
+async function runBattleLoop(
+  personaIds?: string[],
+  maxBattles?: number,
+  options?: {
+    batchSize?: number;
+    maxConcurrent?: number;
+    delayBetweenBattles?: number;
+  }
+) {
   const config = getEnvironmentConfig();
   validateEnvironmentConfig(config);
   assertSandboxMode(config);
@@ -523,6 +624,11 @@ async function runBattleLoop(personaIds?: string[], maxBattles?: number) {
   if (!supabaseAdmin) {
     throw new Error('Supabase admin client not available');
   }
+
+  // Concurrency control
+  const batchSize = options?.batchSize || maxBattles || 10;
+  const maxConcurrent = options?.maxConcurrent || 3; // Run max 3 battles concurrently
+  const delayBetweenBattles = options?.delayBetweenBattles || 1000; // 1 second delay
 
   // Get active personas
   let personas;
@@ -540,7 +646,7 @@ async function runBattleLoop(personaIds?: string[], maxBattles?: number) {
       .from('sandbox_personas')
       .select('id, name')
       .eq('is_active', true)
-      .limit(maxBattles || 10);
+      .limit(batchSize);
 
     if (error) throw error;
     personas = data;
@@ -550,29 +656,48 @@ async function runBattleLoop(personaIds?: string[], maxBattles?: number) {
     throw new Error('No active personas found');
   }
 
-  logger.info('Starting battle loop', { personaCount: personas.length, maxCost: MAX_SESSION_COST });
+  logger.info('Starting battle loop', {
+    personaCount: personas.length,
+    batchSize,
+    maxConcurrent,
+    maxCost: MAX_SESSION_COST,
+  });
 
   const results = [];
   let totalCost = 0;
   let killSwitchTriggered = false;
 
+  // Process personas sequentially with optional concurrency (simplified approach)
+  // For true concurrency, battles would need to be processed in parallel batches
   for (const persona of personas) {
+    // Check budget before starting battle (throws error if exceeded)
     try {
-      // Check kill-switch before each battle (both cost-based and API-based)
-      if (totalCost >= MAX_SESSION_COST) {
-        logger.warn('Kill-switch threshold reached, stopping battle loop', { totalCost });
+      await checkBudget();
+    } catch (error: any) {
+      if (error?.message?.includes('Budget Limit Reached')) {
+        logger.error('Budget limit reached, stopping battle loop', { error: error.message });
         killSwitchTriggered = true;
         break;
       }
+      // Re-throw if it's a different error
+      throw error;
+    }
 
-      // Check if kill-switch was activated via API
-      const apiKillSwitchActive = await checkKillSwitchAPI();
-      if (apiKillSwitchActive) {
-        logger.warn('Kill-switch activated via API, stopping battle loop');
-        killSwitchTriggered = true;
-        break;
-      }
+    // Check kill-switch before starting battle
+    if (totalCost >= MAX_SESSION_COST) {
+      logger.warn('Kill-switch threshold reached, stopping battle loop', { totalCost });
+      killSwitchTriggered = true;
+      break;
+    }
 
+    const apiKillSwitchActive = await checkKillSwitchAPI();
+    if (apiKillSwitchActive) {
+      logger.warn('Kill-switch activated via API, stopping battle loop');
+      killSwitchTriggered = true;
+      break;
+    }
+
+    try {
       const result = await runBattle(persona.id);
       results.push(result);
       totalCost += result.cost;
@@ -592,16 +717,10 @@ async function runBattleLoop(personaIds?: string[], maxBattles?: number) {
         break;
       }
 
-      // Check API kill-switch after battle
-      const apiKillSwitchActiveAfter = await checkKillSwitchAPI();
-      if (apiKillSwitchActiveAfter) {
-        logger.warn('Kill-switch activated via API after battle');
-        killSwitchTriggered = true;
-        break;
+      // Small delay between battles (rate limiting)
+      if (delayBetweenBattles > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delayBetweenBattles));
       }
-
-      // Small delay between battles
-      await new Promise((resolve) => setTimeout(resolve, 1000));
     } catch (error: any) {
       // Check if error is kill-switch related
       if (error?.message?.includes('Kill-switch')) {
@@ -613,6 +732,50 @@ async function runBattleLoop(personaIds?: string[], maxBattles?: number) {
       // Continue with next battle unless kill-switch
     }
   }
+
+  // Process all personas in batches
+  const allPersonas = personas;
+  for (let i = 0; i < allPersonas.length && !killSwitchTriggered; i += batchSize) {
+    const batch = allPersonas.slice(i, i + batchSize);
+    const batchResults = await processBatch(batch);
+    results.push(...batchResults);
+
+    if (killSwitchTriggered) {
+      break;
+    }
+  }
+
+  // Send final summary if kill-switch was triggered
+  if (killSwitchTriggered) {
+    const slackWebhook = process.env.SLACK_WEBHOOK_URL;
+    if (slackWebhook) {
+      const message = `⚠️ AUTONOMOUS BATTLE SESSION COMPLETE (KILL-SWITCH)\n\n` +
+        `Battles completed: ${results.length}\n` +
+        `Total cost: $${totalCost.toFixed(2)}\n` +
+        `Threshold: $${MAX_SESSION_COST.toFixed(2)}\n` +
+        `Average score: ${results.length > 0 ? (results.reduce((sum, r) => sum + r.score.totalScore, 0) / results.length).toFixed(1) : 'N/A'}`;
+
+      fetch(slackWebhook, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: message }),
+      }).catch((error) => {
+        logger.error('Error sending Slack summary', { error });
+      });
+    }
+  }
+
+  logger.info('Battle loop complete', {
+    battlesRun: results.length,
+    totalCost,
+    killSwitchTriggered,
+    averageScore: results.length > 0
+      ? results.reduce((sum, r) => sum + r.score.totalScore, 0) / results.length
+      : 0,
+  });
+
+  return results;
+
 
   // Send final summary if kill-switch was triggered
   if (killSwitchTriggered) {

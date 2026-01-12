@@ -13,6 +13,7 @@ import type { GauntletLevel } from '@/lib/gauntletLevels';
 import { getElevenLabsCloserConfig, getElevenLabsSellerConfig, getDeepgramSTTConfig, getCentralizedAssistantConfig, getVoiceSettings, getTestStability, type ScriptGate } from '@/lib/vapiConfig';
 import { getRegionalVoiceConfig, getVoicePersonaLabel } from '@/lib/voiceRegions';
 import { getOptimalModel, determineSessionType, formatModelSelectionForLogging } from '@/lib/modelSwitcher';
+import { prepareCallWithNeighborhoodContext } from '@/lib/neighborhoodPulse';
 import logger from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
@@ -149,6 +150,37 @@ export async function POST(request: NextRequest) {
     let useCentralizedConfig = false;
     let centralizedConfig: Awaited<ReturnType<typeof getCentralizedAssistantConfig>> | null = null;
 
+    // Inject neighborhood context if property address is provided
+    let enhancedSystemPrompt = persona.systemPrompt;
+    let neighborhoodContext = null;
+    if (propertyAddress && !isRoleReversal) {
+      // Extract zip code from address or use propertyLocation
+      const zipMatch = propertyAddress.match(/\b\d{5}(-\d{4})?\b/);
+      const zipCode = zipMatch ? zipMatch[0] : propertyLocation?.match(/\b\d{5}\b/)?.[0] || '';
+      
+      if (zipCode) {
+        try {
+          const contextResult = await prepareCallWithNeighborhoodContext(
+            persona.systemPrompt,
+            propertyAddress,
+            zipCode,
+            propertyLocation?.split(',')[0]?.trim(),
+            propertyLocation?.split(',')[1]?.trim()
+          );
+          enhancedSystemPrompt = contextResult.enhancedPrompt;
+          neighborhoodContext = contextResult.context;
+          logger.info('Neighborhood context injected', {
+            address: propertyAddress,
+            zipCode,
+            compsCount: contextResult.context.cashComps.length,
+          });
+        } catch (error) {
+          logger.warn('Error injecting neighborhood context', { error, propertyAddress });
+          // Continue with original prompt if context injection fails
+        }
+      }
+    }
+
     if (isRoleReversal && validPersonaMode === 'acquisition') {
       // Use centralized config for Learning Mode (roleReversal)
       // Pass currentGate for context-aware voice settings (defaults to 'Introduction' for initial setup)
@@ -191,7 +223,15 @@ export async function POST(request: NextRequest) {
               messages: [
                 {
                   role: 'system',
-                  content: centralizedConfig.systemPrompt, // Full 2.0 script + PA Summary
+                  content: neighborhoodContext
+                    ? await prepareCallWithNeighborhoodContext(
+                        centralizedConfig.systemPrompt,
+                        propertyAddress || '',
+                        propertyLocation?.match(/\b\d{5}\b/)?.[0] || '',
+                        propertyLocation?.split(',')[0]?.trim(),
+                        propertyLocation?.split(',')[1]?.trim()
+                      ).then((r) => r.enhancedPrompt)
+                    : centralizedConfig.systemPrompt, // Full 2.0 script + PA Summary + Market Intelligence
                 },
               ],
             }
@@ -202,7 +242,7 @@ export async function POST(request: NextRequest) {
               messages: [
                 {
                   role: 'system',
-                  content: persona.systemPrompt,
+                  content: enhancedSystemPrompt, // Includes neighborhood context if available
                 },
               ],
             },
@@ -389,6 +429,7 @@ export async function POST(request: NextRequest) {
           reason_for_selection: modelSelectionLog.reason_for_selection,
           daily_spend_at_selection: modelSelectionLog.daily_spend,
           session_type: modelSelectionLog.session_type,
+          selectedModel: selectedModel, // Store the actual model used
         },
       };
 
@@ -529,7 +570,8 @@ export async function POST(request: NextRequest) {
     logger.info('Vapi assistant created successfully', {
       assistantId: assistant.id,
       personaMode: validPersonaMode,
-      model: modelSelectionLog.model,
+      model: selectedModel,
+      modelSelection: modelSelectionLog,
     });
 
     // After assistant creation, update it to ensure background speech denoising is enabled
