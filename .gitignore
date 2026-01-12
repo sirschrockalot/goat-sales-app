@@ -67,3 +67,46 @@ temp/
 
 # Prompt Outputs
 merged_prompt_output.txt
+
+# Local Database & Environment Files
+# Supabase local database files
+supabase/.branches/
+supabase/.temp/
+supabase/.volumes/
+supabase/.config.toml.local
+
+# Docker volumes and data
+postgres_data/
+redis_data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Machine-specific logs
+logs/
+*.log.local
+*.log.*.local
+
+# Local environment overrides (keep .env.example files)
+.env.local
+.env.*.local
+!.env.example
+!.env.development.example
+!.env.production.example
+
+# Doppler local config (keep project configs)
+.doppler/
+
+# IDE and OS specific
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Keep migrations and seeds tracked
+!supabase/migrations/
+!supabase/seed.sql
+!supabase/config.toml

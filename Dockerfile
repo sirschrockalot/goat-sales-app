@@ -1,47 +1,39 @@
 # Dockerfile for Goat Sales App
-# Multi-stage build for optimized production image
+# Node 20 Alpine with Doppler CLI and Supabase CLI
 
-# Stage 1: Dependencies
-FROM node:20-alpine AS deps
+FROM node:20-alpine
+
+# Install system dependencies
+RUN apk add --no-cache \
+    git \
+    curl \
+    bash \
+    postgresql-client \
+    openssl
+
+# Install Doppler CLI
+RUN curl -Ls --tlsv1.2 --proto "=https" --retry 3 https://cli.doppler.com/public/install/unix.sh | sh
+
+# Install Supabase CLI
+RUN curl -Ls --tlsv1.2 --proto "=https" --retry 3 https://github.com/supabase/cli/releases/latest/download/supabase_linux_amd64.tar.gz | tar -xz -C /usr/local/bin
+
+# Make Supabase CLI executable
+RUN chmod +x /usr/local/bin/supabase
+
+# Set working directory
 WORKDIR /app
 
 # Copy package files
-COPY package.json package-lock.json* ./
+COPY package*.json ./
+
+# Install dependencies
 RUN npm ci
 
-# Stage 2: Builder
-FROM node:20-alpine AS builder
-WORKDIR /app
-
-# Copy dependencies from deps stage
-COPY --from=deps /app/node_modules ./node_modules
+# Copy application files
 COPY . .
 
-# Build the application
-ENV NEXT_TELEMETRY_DISABLED 1
-RUN npm run build
-
-# Stage 3: Runner
-FROM node:20-alpine AS runner
-WORKDIR /app
-
-ENV NODE_ENV production
-ENV NEXT_TELEMETRY_DISABLED 1
-
-# Create non-root user
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-
-# Copy necessary files
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-
-USER nextjs
-
+# Expose Next.js port
 EXPOSE 3000
 
-ENV PORT 3000
-ENV HOSTNAME "0.0.0.0"
-
-CMD ["node", "server.js"]
+# Default command (can be overridden in docker-compose.yml)
+CMD ["npm", "run", "dev"]

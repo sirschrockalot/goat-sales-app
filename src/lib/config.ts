@@ -1,6 +1,7 @@
 /**
  * Application Configuration
  * Centralized config management with environment-based switching
+ * Priority: Doppler (process.env) > Docker/Supabase defaults
  */
 
 import { getEnvironmentConfig, EnvironmentConfig } from '../../config/environments';
@@ -20,26 +21,51 @@ export interface AppConfig {
 }
 
 /**
+ * Get environment variable with priority: Doppler > Docker > Default
+ * Doppler injects secrets into process.env at runtime
+ */
+function getEnvVar(key: string, defaultValue: string): string {
+  // Priority 1: Doppler-injected env vars (process.env)
+  if (process.env[key]) {
+    return process.env[key];
+  }
+  
+  // Priority 2: Docker/Supabase defaults (for local development)
+  // Priority 3: Fallback to provided default
+  return defaultValue;
+}
+
+/**
  * Get application configuration
- * Switches between LOCAL_DB and SUPABASE_SANDBOX_URL based on environment
+ * Priority: Doppler (process.env) > Docker/Supabase defaults
  */
 export function getAppConfig(): AppConfig {
   const envConfig = getEnvironmentConfig();
-  const useLocalDb = process.env.USE_LOCAL_DB === 'true';
-  const sandboxUrl = process.env.SUPABASE_SANDBOX_URL || process.env.SANDBOX_SUPABASE_URL;
+  
+  // Check if using local Docker database
+  const useLocalDb = getEnvVar('USE_LOCAL_DB', 'false') === 'true';
+  
+  // Database URL priority: Doppler > Docker > Supabase
+  const localDbUrl = getEnvVar(
+    'LOCAL_DB_URL',
+    'postgresql://postgres:postgres@localhost:5432/sandbox' // Docker default
+  );
+  
+  const sandboxUrl = getEnvVar(
+    'SUPABASE_SANDBOX_URL',
+    getEnvVar('SANDBOX_SUPABASE_URL', envConfig.supabase.url)
+  );
 
   return {
     database: {
-      url: useLocalDb
-        ? process.env.LOCAL_DB_URL || 'postgresql://localhost:5432/sandbox'
-        : sandboxUrl || envConfig.supabase.url,
+      url: useLocalDb ? localDbUrl : sandboxUrl,
       useLocalDb,
-      sandboxUrl,
+      sandboxUrl: sandboxUrl || undefined,
     },
     training: {
-      batchSize: parseInt(process.env.TRAINING_BATCH_SIZE || '5', 10),
-      maxBatchSize: parseInt(process.env.MAX_TRAINING_BATCH_SIZE || '10', 10),
-      maxExecutionTimeMs: parseInt(process.env.MAX_TRAINING_EXECUTION_TIME_MS || '50000', 10),
+      batchSize: parseInt(getEnvVar('TRAINING_BATCH_SIZE', '5'), 10),
+      maxBatchSize: parseInt(getEnvVar('MAX_TRAINING_BATCH_SIZE', '10'), 10),
+      maxExecutionTimeMs: parseInt(getEnvVar('MAX_TRAINING_EXECUTION_TIME_MS', '50000'), 10),
     },
     environment: envConfig,
   };

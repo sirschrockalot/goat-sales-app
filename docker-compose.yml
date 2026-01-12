@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  # App Service - Node/TypeScript environment
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: goat-sales-app
+    ports:
+      - "3000:3000"
+    volumes:
+      # Hot-reload volumes
+      - ./src:/app/src
+      - ./scripts:/app/scripts
+      - ./supabase:/app/supabase
+      - ./config:/app/config
+      - ./base_prompt.txt:/app/base_prompt.txt
+      # Exclude node_modules (use container's)
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - USE_LOCAL_DB=true
+      - LOCAL_DB_URL=postgresql://postgres:postgres@postgres:5432/sandbox
+      - REDIS_URL=redis://redis:6379
+      # Doppler integration (secrets injected at runtime)
+      - DOPPLER_TOKEN=${DOPPLER_TOKEN:-}
+    depends_on:
+      - postgres
+      - redis
+    command: sh -c "npm run dev"
+    networks:
+      - goat-network
+
+  # Postgres Service - Local DB mirroring Supabase Sandbox
+  postgres:
+    image: postgres:15-alpine
+    container_name: goat-sales-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=sandbox
+    volumes:
+      # Persist database data
+      - postgres_data:/var/lib/postgresql/data
+      # Mount migrations and seed
+      - ./supabase/migrations:/docker-entrypoint-initdb.d/migrations
+      - ./supabase/seed.sql:/docker-entrypoint-initdb.d/seed.sql
+    networks:
+      - goat-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Service - Task queues for autonomous training
+  redis:
+    image: redis:7-alpine
+    container_name: goat-sales-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - goat-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  goat-network:
+    driver: bridge

@@ -1,0 +1,6 @@
+# Doppler Configuration
+# This file tells Doppler which project and config to use
+# Run: doppler setup --project goat-sales-app --config dev_goat-sales-app
+
+project: goat-sales-app
+config: dev_goat-sales-app

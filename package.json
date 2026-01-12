@@ -51,7 +51,11 @@
     "scout:start": "tsx scripts/startTacticalScout.ts",
     "scout:scan": "tsx scripts/scanBreakthroughs.ts",
     "audit:daily": "tsx scripts/dailyAuditor.ts",
-    "research:pre-call": "tsx scripts/preCallResearch.ts"
+    "research:pre-call": "tsx scripts/preCallResearch.ts",
+    "init": "chmod +x scripts/sync-env.sh && ./scripts/sync-env.sh",
+    "doppler:setup": "chmod +x scripts/setup-doppler.sh && ./scripts/setup-doppler.sh",
+    "doppler:secrets": "doppler secrets --config dev",
+    "dev:doppler": "doppler run -- npm run dev"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.90.1",
