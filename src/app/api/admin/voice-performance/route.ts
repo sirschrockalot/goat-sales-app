@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getVoicePerformanceStats, getOptimalStability } from '@/lib/voicePerformance';
 import { getUserFromRequest } from '@/lib/getUserFromRequest';
-import { supabaseAdmin } from '@/lib/supabase';
+
 import logger from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Check if user is admin
+    const { supabaseAdmin } = await import('@/lib/supabase');
     if (!supabaseAdmin) {
       return NextResponse.json(
         { error: 'Server configuration error' },
@@ -32,7 +33,7 @@ export async function GET(request: NextRequest) {
       .eq('id', user.id)
       .single();
 
-    if (!profile?.is_admin) {
+    if (!profile || !(profile as any).is_admin) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -62,6 +63,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const { supabaseAdmin } = await import('@/lib/supabase');
     if (!supabaseAdmin) {
       return NextResponse.json(
         { error: 'Server configuration error' },
@@ -75,7 +77,7 @@ export async function POST(request: NextRequest) {
       .eq('id', user.id)
       .single();
 
-    if (!profile?.is_admin) {
+    if (!profile || !(profile as any).is_admin) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

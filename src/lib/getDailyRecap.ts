@@ -3,7 +3,6 @@
  * Queries Supabase for team performance metrics over the last 24 hours
  */
 
-import { supabaseAdmin } from '@/lib/supabase';
 import logger from '@/lib/logger';
 
 export interface RepPerformance {
@@ -50,6 +49,12 @@ const GATE_NAMES = [
  * Get daily recap data for the last 24 hours
  */
 export async function getDailyRecap(): Promise<DailyRecapData> {
+  const { supabaseAdmin } = await import('@/lib/supabase');
+  if (!supabaseAdmin) {
+    logger.error('Supabase admin client not available');
+    throw new Error('Database not available');
+  }
+
   const now = new Date();
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
@@ -88,12 +93,14 @@ export async function getDailyRecap(): Promise<DailyRecapData> {
   }
 
   // Calculate team averages
-  const todayScores = (todayCalls || []).map((c) => c.goat_score || 0);
+  const todayCallsData = (todayCalls as any[]) || [];
+  const yesterdayCallsData = (yesterdayCalls as any[]) || [];
+  const todayScores = todayCallsData.map((c: any) => c.goat_score || 0);
   const teamAverageGoatScore = todayScores.length > 0
-    ? Math.round(todayScores.reduce((sum, score) => sum + score, 0) / todayScores.length)
+    ? Math.round(todayScores.reduce((sum: number, score: number) => sum + score, 0) / todayScores.length)
     : 0;
 
-  const yesterdayScores = (yesterdayCalls || []).map((c) => c.goat_score || 0);
+  const yesterdayScores = yesterdayCallsData.map((c: any) => c.goat_score || 0);
   const teamAverageYesterday = yesterdayScores.length > 0
     ? Math.round(yesterdayScores.reduce((sum, score) => sum + score, 0) / yesterdayScores.length)
     : null;
@@ -113,17 +120,18 @@ export async function getDailyRecap(): Promise<DailyRecapData> {
   }>();
 
   // Fetch profiles separately for better performance
-  const userIds = [...new Set((todayCalls || []).map((c) => c.user_id))];
+  const userIds = [...new Set(todayCallsData.map((c: any) => c.user_id))];
   const { data: profiles } = await supabaseAdmin
     .from('profiles')
     .select('id, name, email')
     .in('id', userIds);
 
+  const profilesData = (profiles as any[]) || [];
   const profileMap = new Map(
-    (profiles || []).map((p) => [p.id, { name: p.name || 'Unknown Rep', email: p.email || '' }])
+    profilesData.map((p: any) => [p.id, { name: p.name || 'Unknown Rep', email: p.email || '' }])
   );
 
-  (todayCalls || []).forEach((call) => {
+  todayCallsData.forEach((call: any) => {
     const userId = call.user_id;
     const profile = profileMap.get(userId) || { name: 'Unknown Rep', email: '' };
 
@@ -188,7 +196,7 @@ export async function getDailyRecap(): Promise<DailyRecapData> {
     .fill(0)
     .map((_, i) => ({ gate: i + 1, total: 0, count: 0 }));
 
-  (todayCalls || []).forEach((call) => {
+  todayCallsData.forEach((call: any) => {
     if (call.script_adherence && typeof call.script_adherence === 'object') {
       const adherence = call.script_adherence as any;
       if (adherence.gates && Array.isArray(adherence.gates)) {
@@ -215,8 +223,8 @@ export async function getDailyRecap(): Promise<DailyRecapData> {
     : null;
 
   // Find top rebuttal (highest scoring rebuttal_of_the_day)
-  const topRebuttalCall = (todayCalls || [])
-    .filter((c) => c.rebuttal_of_the_day && c.rebuttal_of_the_day !== 'None')
+  const topRebuttalCall = todayCallsData
+    .filter((c: any) => c.rebuttal_of_the_day && c.rebuttal_of_the_day !== 'None')
     .sort((a, b) => (b.goat_score || 0) - (a.goat_score || 0))[0];
 
   const topRebuttal = topRebuttalCall

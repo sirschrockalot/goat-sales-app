@@ -3,7 +3,7 @@
  * Compares call transcript against script_segments to calculate adherence
  */
 
-import { supabaseAdmin } from '@/lib/supabase';
+// supabaseAdmin imported dynamically
 import OpenAI from 'openai';
 import logger from '@/lib/logger';
 
@@ -81,6 +81,12 @@ export async function analyzeDeviation(
     const gateNames = mode === 'disposition' ? DISPO_GATE_NAMES : ACQUISITION_GATE_NAMES;
 
     // Get all script segments from the appropriate table
+    const { supabaseAdmin } = await import('@/lib/supabase');
+    if (!supabaseAdmin) {
+      logger.warn('supabaseAdmin not available, returning empty script adherence analysis');
+      return getEmptyAnalysis();
+    }
+
     const { data: scriptSegments, error } = await supabaseAdmin
       .from(tableName)
       .select('id, gate_number, gate_name, script_text, embedding')
@@ -96,7 +102,8 @@ export async function analyzeDeviation(
     let maxSimilarity = 0;
     let goldenMoment: DeviationAnalysis['goldenMoment'] = null;
 
-    for (const segment of scriptSegments) {
+    const scriptSegmentsData = (scriptSegments as any[]) || [];
+    for (const segment of scriptSegmentsData) {
       if (!segment.embedding || !Array.isArray(segment.embedding)) {
         // Skip if no embedding
         gateDeviations.push({

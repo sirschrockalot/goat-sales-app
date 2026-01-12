@@ -14,6 +14,7 @@ interface GoatModeLayerProps {
   isActive: boolean;
   adherenceScore: number; // 0-100
   intensity?: number; // 0-1, based on audio/certainty
+  onGate5Complete?: () => void;
 }
 
 export default function GoatModeLayer({

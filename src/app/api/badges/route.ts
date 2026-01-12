@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin, createSupabaseClient } from '@/lib/supabase';
+import { createSupabaseClient } from '@/lib/supabase';
 import logger from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
@@ -21,6 +21,12 @@ export async function GET(request: NextRequest) {
     }
 
     const userId = user.id;
+
+    // Get supabaseAdmin
+    const { supabaseAdmin } = await import('@/lib/supabase');
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Database not available' }, { status: 500 });
+    }
 
     // Get user badges
     const { data: badges, error } = await supabaseAdmin
@@ -74,6 +80,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Get supabaseAdmin
+    const { supabaseAdmin } = await import('@/lib/supabase');
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Database not available' }, { status: 500 });
+    }
+
     // Check if badge already exists
     const { data: existing } = await supabaseAdmin
       .from('badges')
@@ -91,7 +103,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Insert new badge
-    const { data: badge, error } = await supabaseAdmin
+    const { data: badge, error } = await (supabaseAdmin as any)
       .from('badges')
       .insert({
         user_id: userId,
@@ -99,7 +111,7 @@ export async function POST(request: NextRequest) {
         badge_name: badgeName,
         badge_description: badgeDescription || '',
         metadata: metadata || {},
-      })
+      } as any)
       .select()
       .single();
 

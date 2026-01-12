@@ -4,11 +4,17 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+
 import logger from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
+    // Get supabaseAdmin
+    const { supabaseAdmin } = await import('@/lib/supabase');
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Database not available' }, { status: 500 });
+    }
+
     // OPTIMIZED: Use the leaderboard_view for pre-calculated data
     const { data: leaderboardData, error: viewError } = await supabaseAdmin
       .from('leaderboard_view')
@@ -22,13 +28,13 @@ export async function GET(request: NextRequest) {
     }
 
     // OPTIMIZED: Fetch all profiles in one query instead of N queries
-    const userIds = leaderboardData?.map(l => l.user_id) || [];
+    const userIds = (leaderboardData as any[])?.map((l: any) => l.user_id) || [];
     const { data: profiles } = await supabaseAdmin
       .from('profiles')
       .select('id, name, email')
       .in('id', userIds);
 
-    const profilesMap = new Map(profiles?.map(p => [p.id, p]) || []);
+    const profilesMap = new Map((profiles as any[])?.map((p: any) => [p.id, p]) || []);
 
     // OPTIMIZED: Fetch all recent calls in one query, grouped by user
     const { data: allRecentCalls } = await supabaseAdmin
@@ -39,8 +45,8 @@ export async function GET(request: NextRequest) {
       .limit(1000); // Get recent calls for all users
 
     // Group calls by user_id
-    const callsByUser = new Map<string, typeof allRecentCalls>();
-    allRecentCalls?.forEach(call => {
+    const callsByUser = new Map<string, any[]>();
+    (allRecentCalls as any[])?.forEach((call: any) => {
       if (!call.user_id) return;
       if (!callsByUser.has(call.user_id)) {
         callsByUser.set(call.user_id, []);
@@ -52,7 +58,7 @@ export async function GET(request: NextRequest) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const leaderboard = (leaderboardData || []).map((stats) => {
+    const leaderboard = ((leaderboardData as any[]) || []).map((stats: any) => {
       const profile = profilesMap.get(stats.user_id);
       const userCalls = callsByUser.get(stats.user_id) || [];
       
@@ -93,6 +99,10 @@ export async function GET(request: NextRequest) {
  * Fallback leaderboard calculation if view doesn't exist
  */
 async function getLeaderboardFallback() {
+  const { supabaseAdmin } = await import('@/lib/supabase');
+  if (!supabaseAdmin) {
+    return NextResponse.json({ error: 'Database not available' }, { status: 500 });
+  }
   const { data: calls } = await supabaseAdmin
     .from('calls')
     .select('user_id, goat_score, created_at')
@@ -107,7 +117,7 @@ async function getLeaderboardFallback() {
     lastCallDate: string;
   }> = {};
 
-  calls?.forEach((call) => {
+  (calls as any[])?.forEach((call: any) => {
     if (!call.user_id) return;
     if (!userStats[call.user_id]) {
       userStats[call.user_id] = {
@@ -131,7 +141,7 @@ async function getLeaderboardFallback() {
     .select('id, name, email')
     .in('id', userIds);
 
-  const profilesMap = new Map(profiles?.map(p => [p.id, p]) || []);
+  const profilesMap = new Map((profiles as any[])?.map((p: any) => [p.id, p]) || []);
 
   const leaderboard = Object.values(userStats).map((stats) => {
     stats.averageScore = Math.round(stats.totalScore / stats.totalCalls);

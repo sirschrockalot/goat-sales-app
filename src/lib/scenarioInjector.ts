@@ -4,10 +4,9 @@
  */
 
 import OpenAI from 'openai';
-import { supabaseAdmin } from './supabase';
-import { getEnvironmentConfig, assertSandboxMode } from './config/environments';
+import { getEnvironmentConfig, assertSandboxMode } from '../../config/environments';
 import logger from './logger';
-import { runBattle } from '../scripts/autonomousBattle';
+// runBattle will be imported dynamically when needed (server-side only)
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || '',
@@ -46,10 +45,6 @@ export async function injectScenario(
 ): Promise<InjectedScenario> {
   const config = getEnvironmentConfig();
   assertSandboxMode(config);
-
-  if (!supabaseAdmin) {
-    throw new Error('Supabase admin client not available');
-  }
 
   logger.info('Injecting scenario', { rawObjection, sellerPersona });
 
@@ -107,7 +102,12 @@ Return a JSON object with this structure:
   const personaId = await createOrFindPersona(conflictState, systemPrompt);
 
   // Create scenario injection record
-  const { data: scenario, error: scenarioError } = await supabaseAdmin
+  const { supabaseAdmin } = await import('./supabase');
+  if (!supabaseAdmin) {
+    throw new Error('Database not available');
+  }
+
+  const { data: scenario, error: scenarioError } = await (supabaseAdmin as any)
     .from('scenario_injections')
     .insert({
       raw_objection: rawObjection,
@@ -116,7 +116,7 @@ Return a JSON object with this structure:
       system_prompt: systemPrompt,
       status: 'pending',
       total_sessions: 50,
-    })
+    } as any)
     .select()
     .single();
 
@@ -177,6 +177,7 @@ async function createOrFindPersona(
   conflictState: ConflictState,
   systemPrompt: string
 ): Promise<string> {
+  const { supabaseAdmin } = await import('./supabase');
   if (!supabaseAdmin) {
     throw new Error('Supabase admin client not available');
   }
@@ -194,16 +195,16 @@ async function createOrFindPersona(
 
   if (existing) {
     // Update the system prompt
-    await supabaseAdmin
+    await (supabaseAdmin as any)
       .from('sandbox_personas')
-      .update({ system_prompt: systemPrompt })
-      .eq('id', existing.id);
+      .update({ system_prompt: systemPrompt } as any)
+      .eq('id', (existing as any).id);
 
-    return existing.id;
+    return (existing as any).id;
   }
 
   // Create new persona
-  const { data: persona, error } = await supabaseAdmin
+  const { data: persona, error } = await (supabaseAdmin as any)
     .from('sandbox_personas')
     .insert({
       name: personaName,
@@ -213,7 +214,7 @@ async function createOrFindPersona(
       characteristics: [conflictState.emotionalState, ...conflictState.blockers],
       attack_patterns: [conflictState.objection],
       is_active: true,
-    })
+    } as any)
     .select()
     .single();
 
@@ -234,6 +235,7 @@ export async function runBruteForceLoop(
   const config = getEnvironmentConfig();
   assertSandboxMode(config);
 
+  const { supabaseAdmin } = await import('./supabase');
   if (!supabaseAdmin) {
     throw new Error('Supabase admin client not available');
   }
@@ -241,9 +243,9 @@ export async function runBruteForceLoop(
   logger.info('Starting brute-force loop', { scenarioId, personaId });
 
   // Update scenario status
-  await supabaseAdmin
+  await (supabaseAdmin as any)
     .from('scenario_injections')
-    .update({ status: 'running' })
+    .update({ status: 'running' } as any)
     .eq('id', scenarioId);
 
   const TOTAL_SESSIONS = 50;
@@ -260,17 +262,20 @@ export async function runBruteForceLoop(
     // Run batch in parallel
     const batchPromises = batch.map(async (index) => {
       try {
-        // Import runBattle dynamically to avoid circular dependencies
-        const { runBattle: runBattleFn } = await import('../scripts/autonomousBattle');
+        // Import runBattle dynamically (server-side only)
+        // Note: This will only work in server-side API routes, not in client components
+        // The scripts directory is outside src, so we use a workaround
+        // In production, consider moving battle logic into src/lib
+        const runBattleFn = (await Function('return import("../../scripts/autonomousBattle.js")')()).runBattle;
         // Use temperature 0.8 for creative problem solving in scenario injection
         const result = await runBattleFn(personaId, undefined, 0.8);
 
         completed++;
 
         // Update progress
-        await supabaseAdmin
+        await (supabaseAdmin as any)
           .from('scenario_injections')
-          .update({ completed_sessions: completed })
+          .update({ completed_sessions: completed } as any)
           .eq('id', scenarioId);
 
         return {
@@ -297,9 +302,9 @@ export async function runBruteForceLoop(
   }
 
   // Update scenario status
-  await supabaseAdmin
+  await (supabaseAdmin as any)
     .from('scenario_injections')
-    .update({ status: 'completed', completed_at: new Date().toISOString() })
+    .update({ status: 'completed', completed_at: new Date().toISOString() } as any)
     .eq('id', scenarioId);
 
   logger.info('Brute-force loop complete', {
@@ -321,6 +326,7 @@ export async function identifyTop3WinningPaths(
   const config = getEnvironmentConfig();
   assertSandboxMode(config);
 
+  const { supabaseAdmin } = await import('./supabase');
   if (!supabaseAdmin) {
     throw new Error('Supabase admin client not available');
   }
@@ -338,7 +344,8 @@ export async function identifyTop3WinningPaths(
     throw new Error(`Scenario not found: ${scenarioId}`);
   }
 
-  const conflictState = JSON.parse(scenario.conflict_state) as ConflictState;
+  const scenarioData = scenario as any;
+  const conflictState = JSON.parse(scenarioData.conflict_state) as ConflictState;
 
   // Filter battles that resolved conflict AND maintained price
   const successfulBattles = battles.filter(
@@ -353,7 +360,7 @@ export async function identifyTop3WinningPaths(
   // Use GPT-4o to identify top 3
   const refereePrompt = `You are an Elite Sales Referee analyzing ${successfulBattles.length} successful battles that resolved a specific objection.
 
-SCENARIO OBJECTION: "${scenario.raw_objection}"
+SCENARIO OBJECTION: "${scenarioData.raw_objection}"
 
 CONFLICT STATE:
 - Emotional State: ${conflictState.emotionalState}
@@ -439,7 +446,7 @@ Return a JSON object with this structure:
     const battle = successfulBattles[topBattle.battleIndex];
     if (!battle) continue;
 
-    await supabaseAdmin.from('scenario_breakthroughs').insert({
+    await (supabaseAdmin as any).from('scenario_breakthroughs').insert({
       scenario_injection_id: scenarioId,
       battle_id: battle.battleId,
       rank: topBattle.rank,
@@ -448,13 +455,13 @@ Return a JSON object with this structure:
       price_maintained: battle.priceMaintained,
       winning_rebuttal: battle.winningRebuttal || battle.transcript.substring(0, 500),
       breakthrough_insight: topBattle.breakthroughInsight,
-    });
+    } as any);
   }
 
   // Mark scenario as having top 3 identified
-  await supabaseAdmin
+  await (supabaseAdmin as any)
     .from('scenario_injections')
-    .update({ top_3_identified: true })
+    .update({ top_3_identified: true } as any)
     .eq('id', scenarioId);
 
   logger.info('Top 3 winning paths identified', {
@@ -482,12 +489,15 @@ export async function injectAndBruteForce(
       // Step 3: Identify top 3
       await identifyTop3WinningPaths(scenario.scenarioId, results);
     })
-    .catch((error) => {
+    .catch(async (error) => {
       logger.error('Error in brute-force workflow', { scenarioId: scenario.scenarioId, error });
-      supabaseAdmin
-        ?.from('scenario_injections')
-        .update({ status: 'failed' })
-        .eq('id', scenario.scenarioId);
+      const { supabaseAdmin } = await import('./supabase');
+      if (supabaseAdmin) {
+        await (supabaseAdmin as any)
+          .from('scenario_injections')
+          .update({ status: 'failed' } as any)
+          .eq('id', scenario.scenarioId);
+      }
     });
 
   return {

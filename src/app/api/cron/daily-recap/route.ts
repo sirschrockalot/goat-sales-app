@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getDailyRecap } from '@/lib/getDailyRecap';
-import { supabaseAdmin } from '@/lib/supabase';
+
 import { generateManagerRecapHTML } from '@/components/emails/ManagerRecapHTML';
 import logger from '@/lib/logger';
 
@@ -35,6 +35,12 @@ export async function GET(request: NextRequest) {
 
     // Get daily recap data
     const recapData = await getDailyRecap();
+
+    // Get supabaseAdmin
+    const { supabaseAdmin } = await import('@/lib/supabase');
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Database not available' }, { status: 500 });
+    }
 
     // Get admin email from profiles
     const { data: admins, error: adminError } = await supabaseAdmin
@@ -86,11 +92,12 @@ export async function GET(request: NextRequest) {
 
     if (resendApiKey) {
       try {
-        const resend = await import('resend');
-        const resendClient = new resend.Resend(resendApiKey);
+        const resendModule = await (Function('return import("resend")')()) as any;
+        const Resend = resendModule.Resend || resendModule.default?.Resend || resendModule.default;
+        const resendClient = new Resend(resendApiKey);
 
         // Send to all admins
-        const emailPromises = admins.map((admin) =>
+        const emailPromises = (admins as any[]).map((admin: any) =>
           resendClient.emails.send({
             from: fromEmail,
             to: admin.email,

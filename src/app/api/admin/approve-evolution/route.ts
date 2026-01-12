@@ -4,7 +4,6 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
 import { getUserFromRequest } from '@/lib/getUserFromRequest';
 import { updateVapiAssistantPrompt } from '@/lib/vapiControl';
 import logger from '@/lib/logger';
@@ -18,13 +17,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify user is admin
+    const { supabaseAdmin } = await import('@/lib/supabase');
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Database not available' }, { status: 500 });
+    }
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
       .select('is_admin')
       .eq('id', user.id)
       .single();
 
-    if (profileError || !profile?.is_admin) {
+    if (profileError || !profile || !(profile as any).is_admin) {
       return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
     }
 
@@ -52,7 +55,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (evolution.status !== 'pending_review') {
+    const evolutionData = evolution as any;
+    if (evolutionData.status !== 'pending_review') {
       return NextResponse.json(
         { error: 'Evolution is not pending review' },
         { status: 400 }
@@ -60,28 +64,28 @@ export async function POST(request: NextRequest) {
     }
 
     // Use edited prompt if provided, otherwise use the original
-    const promptToApply = editedPrompt || evolution.prompt_text;
+    const promptToApply = editedPrompt || evolutionData.prompt_text;
 
     // Deactivate all previous active versions for this assistant
-    await supabaseAdmin
+    await (supabaseAdmin as any)
       .from('prompt_versions')
       .update({ 
         is_active: false,
         status: 'active', // Keep status as active for history
-      })
-      .eq('assistant_id', evolution.assistant_id)
+      } as any)
+      .eq('assistant_id', evolutionData.assistant_id)
       .eq('is_active', true);
 
     // Update the evolution to active
-    const { error: updateError } = await supabaseAdmin
+    const { error: updateError } = await (supabaseAdmin as any)
       .from('prompt_versions')
       .update({
         status: 'active',
         is_active: true,
         applied_by: user.id,
         applied_at: new Date().toISOString(),
-        ...(editedPrompt && { prompt_text: editedPrompt, changes_summary: `${evolution.changes_summary} (Edited by admin)` }),
-      })
+        ...(editedPrompt && { prompt_text: editedPrompt, changes_summary: `${evolutionData.changes_summary} (Edited by admin)` }),
+      } as any)
       .eq('id', evolutionId);
 
     if (updateError) {
@@ -94,13 +98,13 @@ export async function POST(request: NextRequest) {
 
     // Update Vapi Assistant
     try {
-      await updateVapiAssistantPrompt(evolution.assistant_id, promptToApply);
+      await updateVapiAssistantPrompt(evolutionData.assistant_id, promptToApply);
     } catch (vapiError) {
-      logger.error('Error updating Vapi assistant', { error: vapiError, assistantId: evolution.assistant_id, evolutionId });
+      logger.error('Error updating Vapi assistant', { error: vapiError, assistantId: evolutionData.assistant_id, evolutionId });
       // Rollback the status update
-      await supabaseAdmin
+      await (supabaseAdmin as any)
         .from('prompt_versions')
-        .update({ status: 'pending_review', is_active: false })
+        .update({ status: 'pending_review', is_active: false } as any)
         .eq('id', evolutionId);
       
       return NextResponse.json(

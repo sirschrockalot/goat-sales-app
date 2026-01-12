@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+
 import { getUserFromRequest } from '@/lib/getUserFromRequest';
 import logger from '@/lib/logger';
 
@@ -16,6 +16,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get supabaseAdmin
+    const { supabaseAdmin } = await import('@/lib/supabase');
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Database not available' }, { status: 500 });
+    }
+
     // Verify user is admin
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
@@ -23,7 +29,7 @@ export async function GET(request: NextRequest) {
       .eq('id', user.id)
       .single();
 
-    if (profileError || !profile?.is_admin) {
+    if (profileError || !(profile as any)?.is_admin) {
       return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
     }
 
@@ -43,13 +49,14 @@ export async function GET(request: NextRequest) {
 
     // Fetch battle statistics for each persona
     const analytics = await Promise.all(
-      (personas || []).map(async (persona) => {
+      ((personas as any[]) || []).map(async (persona: any) => {
         const { data: battles, error: battlesError } = await supabaseAdmin
           .from('sandbox_battles')
           .select('referee_score, verbal_yes_to_memorandum, success_score')
           .eq('persona_id', persona.id);
 
-        if (battlesError || !battles || battles.length === 0) {
+        const battlesData = (battles as any[]) || [];
+        if (battlesError || battlesData.length === 0) {
           return {
             personaId: persona.id,
             personaName: persona.name,
@@ -62,13 +69,13 @@ export async function GET(request: NextRequest) {
           };
         }
 
-        const totalBattles = battles.length;
-        const verbalYesCount = battles.filter((b) => b.verbal_yes_to_memorandum).length;
+        const totalBattles = battlesData.length;
+        const verbalYesCount = battlesData.filter((b: any) => b.verbal_yes_to_memorandum).length;
         const successRate = (verbalYesCount / totalBattles) * 100;
         const averageScore =
-          battles.reduce((sum, b) => sum + (b.referee_score || 0), 0) / totalBattles;
+          battlesData.reduce((sum: number, b: any) => sum + (b.referee_score || 0), 0) / totalBattles;
         const averageSuccessScore =
-          battles.reduce((sum, b) => sum + (b.success_score || 0), 0) / totalBattles;
+          battlesData.reduce((sum: number, b: any) => sum + (b.success_score || 0), 0) / totalBattles;
 
         return {
           personaId: persona.id,

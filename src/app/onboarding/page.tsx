@@ -6,6 +6,8 @@
  * Triggers on first login after email confirmation
  */
 
+export const dynamic = 'force-dynamic';
+
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';

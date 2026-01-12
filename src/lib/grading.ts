@@ -702,40 +702,66 @@ export async function gradeCall(
       }
     }
 
-    // Add Neural Coaching metrics
-    result.neuralCoaching = {
-      strategicDiscovery: discoveryQuality,
-      discProfile: discProfile,
-      eqMetrics: eqMetrics,
-    };
-    
-    // Apply penalties/bonuses based on neural coaching
-    // Penalty for low discovery quality
-    if (discoveryQuality.score < 60) {
-      const discoveryPenalty = Math.round((60 - discoveryQuality.score) * 0.5); // Up to -20 points
-      result.goatScore = Math.max(0, result.goatScore - discoveryPenalty);
-    }
-    
-    // Penalty for dominance error (talk-time > 60%)
-    if (eqMetrics.dominanceError) {
-      const dominancePenalty = 25; // -25 points for dominance error
-      result.goatScore = Math.max(0, result.goatScore - dominancePenalty);
-    }
-    
-    // Bonus for high discovery quality
-    if (discoveryQuality.score >= 80) {
-      const discoveryBonus = 10; // +10 points for excellent discovery
-      result.goatScore = Math.min(100, result.goatScore + discoveryBonus);
-    }
-    
-    // Add Elliott corrections to feedback if any were detected
-    if (discoveryQuality.elliottCorrections.length > 0) {
-      result.feedback = `${result.feedback}\n\nELLIOTT CORRECTIONS:\n${discoveryQuality.elliottCorrections.join('\n')}`;
-    }
-    
-    // Add EQ feedback if dominance error
-    if (eqMetrics.dominanceError) {
-      result.feedback = `${result.feedback}\n\n${eqMetrics.feedback}`;
+    // Add Neural Coaching metrics if provided
+    if (parsed.neuralCoaching) {
+      const discoveryQuality = parsed.neuralCoaching.strategicDiscovery || {
+        score: 0,
+        surfaceLevelQuestions: 0,
+        strategicBusinessQuestions: 0,
+        motivationTriggersDetected: [],
+        motivationTriggersMissed: [],
+        elliottCorrections: [],
+        feedback: '',
+      };
+      const discProfile = parsed.neuralCoaching.discProfile || {
+        type: 'analytical' as const,
+        confidence: 0,
+        indicators: [],
+      };
+      const eqMetrics = parsed.neuralCoaching.eqMetrics || {
+        talkTimePercentage: repTalkTime && callDuration ? (repTalkTime / callDuration) * 100 : 0,
+        dominanceError: repTalkTime && callDuration ? (repTalkTime / callDuration) > 0.6 : false,
+        activeListeningScore: 0,
+        rapportScore: 0,
+        tonalityScore: 0,
+        sentimentAlignment: 0,
+        feedback: '',
+      };
+
+      result.neuralCoaching = {
+        strategicDiscovery: discoveryQuality,
+        discProfile: discProfile,
+        eqMetrics: eqMetrics,
+      };
+      
+      // Apply penalties/bonuses based on neural coaching
+      // Penalty for low discovery quality
+      if (discoveryQuality.score < 60) {
+        const discoveryPenalty = Math.round((60 - discoveryQuality.score) * 0.5); // Up to -20 points
+        result.goatScore = Math.max(0, result.goatScore - discoveryPenalty);
+      }
+      
+      // Penalty for dominance error (talk-time > 60%)
+      if (eqMetrics.dominanceError) {
+        const dominancePenalty = 25; // -25 points for dominance error
+        result.goatScore = Math.max(0, result.goatScore - dominancePenalty);
+      }
+      
+      // Bonus for high discovery quality
+      if (discoveryQuality.score >= 80) {
+        const discoveryBonus = 10; // +10 points for excellent discovery
+        result.goatScore = Math.min(100, result.goatScore + discoveryBonus);
+      }
+      
+      // Add Elliott corrections to feedback if any were detected
+      if (discoveryQuality.elliottCorrections && discoveryQuality.elliottCorrections.length > 0) {
+        result.feedback = `${result.feedback}\n\nELLIOTT CORRECTIONS:\n${discoveryQuality.elliottCorrections.join('\n')}`;
+      }
+      
+      // Add EQ feedback if dominance error
+      if (eqMetrics.dominanceError && eqMetrics.feedback) {
+        result.feedback = `${result.feedback}\n\n${eqMetrics.feedback}`;
+      }
     }
 
     return result;

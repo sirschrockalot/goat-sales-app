@@ -124,7 +124,6 @@ export default function TrainingMonitor() {
   const [rawObjection, setRawObjection] = useState('');
   const [injecting, setInjecting] = useState(false);
   const [activeScenario, setActiveScenario] = useState<ScenarioStatus | null>(null);
-  const [breakthroughs, setBreakthroughs] = useState<Breakthrough[]>([]);
 
   // Vocal Soul state
   const [humanityGrades, setHumanityGrades] = useState<HumanityGrade[]>([]);
@@ -418,7 +417,7 @@ export default function TrainingMonitor() {
             <textarea
               value={rawObjection}
               onChange={(e) => setRawObjection(e.target.value)}
-              placeholder='e.g., "The guy said he won\'t sign because his lawyer is on vacation"'
+              placeholder='e.g., "The guy said he won&apos;t sign because his lawyer is on vacation"'
               className="w-full h-24 px-4 py-3 bg-gray-900/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-acquisition transition-colors resize-none"
               disabled={injecting || (activeScenario?.status === 'running')}
             />
@@ -557,8 +556,8 @@ export default function TrainingMonitor() {
           )}
         </div>
 
-          {/* Kill Switch */}
-          <div className="flex items-center gap-4">
+        {/* Kill Switch */}
+        <div className="flex items-center gap-4">
             <div className="text-right">
               <div className="text-sm text-gray-400">Kill Switch</div>
               <div className="text-xs text-gray-500">
@@ -588,7 +587,6 @@ export default function TrainingMonitor() {
               )}
             </button>
           </div>
-        </div>
 
         {/* Stats Overview */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

@@ -49,12 +49,19 @@ export default function LearningModeHUD({ mode, currentGate }: LearningModeHUDPr
 
   // Track AI's speech against script segments
   useEffect(() => {
-    if (!transcript || transcript.length === 0 || scriptSegments.length === 0) return;
+    if (!transcript || scriptSegments.length === 0) return;
 
-    const lastMessage = transcript[transcript.length - 1];
-    if (lastMessage.role !== 'assistant') return; // Only track AI's speech
+    // Handle both string and array transcript formats
+    const transcriptArray = transcript as any;
+    const transcriptText = typeof transcript === 'string' 
+      ? transcript.toLowerCase()
+      : Array.isArray(transcriptArray) && transcriptArray.length > 0
+        ? (transcriptArray[transcriptArray.length - 1] as any)?.content?.toLowerCase() || ''
+        : '';
 
-    const aiText = lastMessage.content.toLowerCase();
+    if (!transcriptText) return;
+
+    const aiText = transcriptText;
 
     // Find matching script segment
     for (const segment of scriptSegments) {
@@ -85,7 +92,7 @@ export default function LearningModeHUD({ mode, currentGate }: LearningModeHUDPr
   // Get current gate's script segment
   const currentGateSegment = scriptSegments.find(s => s.gate_number === currentGate);
 
-  if (callStatus.status !== 'in-progress') {
+  if (callStatus?.status !== 'connected') {
     return null;
   }
 

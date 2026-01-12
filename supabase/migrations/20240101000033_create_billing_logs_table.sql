@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS billing_logs (
 -- Indexes for efficient queries
 CREATE INDEX IF NOT EXISTS idx_billing_logs_env_created ON billing_logs(env, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_billing_logs_provider ON billing_logs(provider);
-CREATE INDEX IF NOT EXISTS idx_billing_logs_env_date ON billing_logs(env, DATE(created_at));
+-- Note: Date-based queries use created_at with application-level date filtering
 
 -- RLS policies (service_role can access all, users can only read)
 ALTER TABLE billing_logs ENABLE ROW LEVEL SECURITY;

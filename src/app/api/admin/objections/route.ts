@@ -4,11 +4,16 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+
 import logger from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
+    const { supabaseAdmin } = await import('@/lib/supabase');
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Database not available' }, { status: 500 });
+    }
+
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
     const { data: recentCalls } = await supabaseAdmin
@@ -26,7 +31,7 @@ export async function GET(request: NextRequest) {
       'Other': 0,
     };
 
-    recentCalls?.forEach((call) => {
+    (recentCalls as any[])?.forEach((call: any) => {
       const transcript = call.transcript?.toLowerCase() || '';
       let categorized = false;
 

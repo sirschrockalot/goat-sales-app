@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+
 import { getUserFromRequest } from '@/lib/getUserFromRequest';
 import logger from '@/lib/logger';
 
@@ -24,6 +24,12 @@ export async function GET(request: NextRequest) {
     const gateNumberParam = searchParams.get('gateNumber');
     const mode = (searchParams.get('mode') || 'acquisition') as 'acquisition' | 'disposition';
 
+    // Get supabaseAdmin
+    const { supabaseAdmin } = await import('@/lib/supabase');
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Database not available' }, { status: 500 });
+    }
+
     // Select the correct table based on mode
     const tableName = mode === 'disposition' ? 'dispo_script_segments' : 'script_segments';
 
@@ -42,7 +48,7 @@ export async function GET(request: NextRequest) {
       }
 
       return NextResponse.json({
-        segments: data.map(segment => ({
+        segments: ((data as any[]) || []).map((segment: any) => ({
           gate_number: segment.gate_number,
           gate_name: segment.gate_name,
           script_text: segment.script_text,
@@ -75,13 +81,14 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const dataObj = data as any;
     return NextResponse.json({
-      gate_number: data.gate_number,
-      gate_name: data.gate_name,
-      script_text: data.script_text,
+      gate_number: dataObj.gate_number,
+      gate_name: dataObj.gate_name,
+      script_text: dataObj.script_text,
     });
   } catch (error) {
-    logger.error('Error fetching script text', { error, gateNumber: gateNumberParam, mode });
+    logger.error('Error fetching script text', { error });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

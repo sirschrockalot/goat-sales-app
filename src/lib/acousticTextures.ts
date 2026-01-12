@@ -193,19 +193,20 @@ export async function getTextureInjectionProbability(): Promise<number> {
         .eq('key', 'acoustic_texture_frequency')
         .single();
 
-      if (config?.value) {
-        const configValue = config.value as any;
+      const configData = config as any;
+      if (configData?.value) {
+        const configValue = configData.value as any;
         if (configValue.sessionsRemaining > 0) {
           probability = configValue.adjusted || 0.3;
           // Decrement sessions remaining
-          await supabaseAdmin
+          await (supabaseAdmin as any)
             .from('sandbox_config')
             .update({
               value: {
                 ...configValue,
                 sessionsRemaining: configValue.sessionsRemaining - 1,
               },
-            })
+            } as any)
             .eq('key', 'acoustic_texture_frequency');
         } else {
           // Reset to base after sessions complete

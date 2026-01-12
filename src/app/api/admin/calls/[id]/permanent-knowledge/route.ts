@@ -4,13 +4,12 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
 import { getUserFromRequest } from '@/lib/getUserFromRequest';
 import logger from '@/lib/logger';
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Check admin access
@@ -20,17 +19,21 @@ export async function PATCH(
     }
 
     // Verify user is admin
+    const { supabaseAdmin } = await import('@/lib/supabase');
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Database not available' }, { status: 500 });
+    }
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
       .select('is_admin')
       .eq('id', user.id)
       .single();
 
-    if (profileError || !profile?.is_admin) {
+    if (profileError || !profile || !(profile as any).is_admin) {
       return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
     }
 
-    const callId = params.id;
+    const { id: callId } = await params;
     const body = await request.json();
     const { is_permanent_knowledge } = body;
 
@@ -42,9 +45,9 @@ export async function PATCH(
     }
 
     // Update the call record
-    const { error: updateError } = await supabaseAdmin
+    const { error: updateError } = await (supabaseAdmin as any)
       .from('calls')
-      .update({ is_permanent_knowledge })
+      .update({ is_permanent_knowledge } as any)
       .eq('id', callId);
 
     if (updateError) {

@@ -8,4 +8,4 @@ ADD COLUMN IF NOT EXISTS exit_strategy_chosen TEXT CHECK (exit_strategy_chosen I
 CREATE INDEX IF NOT EXISTS idx_calls_exit_strategy ON calls(exit_strategy_chosen) WHERE exit_strategy_chosen IS NOT NULL;
 
 -- Add comment
-COMMENT ON COLUMN calls.exit_strategy_chosen IS 'AI\'s chosen exit strategy: cash, fix_and_flip, buy_and_hold, subject_to, seller_finance, creative_finance. Used for auditing "Top Earner" decision-making.';
+COMMENT ON COLUMN calls.exit_strategy_chosen IS 'AI chosen exit strategy: cash, fix_and_flip, buy_and_hold, subject_to, seller_finance, creative_finance. Used for auditing Top Earner decision-making.';

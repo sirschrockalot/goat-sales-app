@@ -1,9 +1,10 @@
 /**
  * Promotion Service
  * Flags high-score battles and promotes winning tactics to production
+ * Tactical Promotion Hook: Points to Goat Sales App-Prod for immediate production updates
  */
 
-import { supabaseAdmin } from './supabase';
+import { getSupabaseClientForEnv, getEnvironmentConfig } from './env-manager';
 import logger from './logger';
 import * as fs from 'fs-extra';
 import * as path from 'path';
@@ -37,6 +38,7 @@ interface Tactic {
  * Get golden samples (score > 95) - automatically suggested for promotion
  */
 export async function getGoldenSamples(): Promise<HighScoreBattle[]> {
+  const { supabaseAdmin } = await import('./supabase');
   if (!supabaseAdmin) {
     throw new Error('Supabase admin client not available');
   }
@@ -81,6 +83,7 @@ export async function getGoldenSamples(): Promise<HighScoreBattle[]> {
  * Get high-score battles (score > 90)
  */
 export async function getHighScoreBattles(): Promise<HighScoreBattle[]> {
+  const { supabaseAdmin } = await import('./supabase');
   if (!supabaseAdmin) {
     throw new Error('Supabase admin client not available');
   }
@@ -150,14 +153,22 @@ export function extractWinningRebuttal(battle: HighScoreBattle): string | null {
 /**
  * Promote a tactic to production
  * Appends the winning tactic to production_base_prompt.txt with synthetic tags
+ * Tactical Promotion Hook: Updates PROD Supabase immediately when "Blessed"
  */
 export async function promoteTactic(tacticId: string): Promise<void> {
-  if (!supabaseAdmin) {
-    throw new Error('Supabase admin client not available');
+  const envConfig = getEnvironmentConfig();
+  const { supabaseAdmin } = await import('./supabase');
+  
+  // Use PROD Supabase for promotion (Tactical Promotion Hook)
+  const prodSupabase = getSupabaseClientForEnv('prod');
+  const sandboxSupabase = supabaseAdmin || getSupabaseClientForEnv('sandbox');
+
+  if (!sandboxSupabase) {
+    throw new Error('Sandbox Supabase client not available');
   }
 
-  // Get tactic from database
-  const { data: tactic, error: tacticError } = await supabaseAdmin
+  // Get tactic from SANDBOX database
+  const { data: tactic, error: tacticError } = await sandboxSupabase
     .from('sandbox_tactics')
     .select('*, sandbox_battles!inner(*)')
     .eq('id', tacticId)
@@ -191,24 +202,62 @@ ${tactic.tactic_text}
 
   const updatedPrompt = basePrompt + tacticSection;
 
-  // Write back to file
+  // Write back to file (local/version control)
   await fs.writeFile(basePromptPath, updatedPrompt, 'utf-8');
 
-  // Mark tactic as promoted in database
-  const { error: updateError } = await supabaseAdmin
+  // TACTICAL PROMOTION HOOK: Update PROD Supabase immediately
+  // Store promoted tactic in PROD database for immediate production use
+  try {
+    const { error: prodError } = await prodSupabase
+      .from('sandbox_tactics')
+      .upsert({
+        id: tactic.id,
+        battle_id: tactic.battle_id,
+        tactic_text: tactic.tactic_text,
+        is_synthetic: true,
+        priority: tactic.priority,
+        is_active: true,
+        promoted_at: new Date().toISOString(),
+        // Store in PROD for immediate production system access
+        metadata: {
+          promoted_from: 'sandbox',
+          promoted_at: new Date().toISOString(),
+          environment: 'prod',
+        },
+      }, {
+        onConflict: 'id',
+      });
+
+    if (prodError) {
+      logger.error('Error promoting tactic to PROD Supabase', { error: prodError });
+      // Continue even if PROD update fails - file was updated
+    } else {
+      logger.info('✅ Tactic promoted to PROD Supabase (Goat Sales App-Prod)', {
+        tacticId,
+        prodProject: envConfig.supabase.projectName,
+      });
+    }
+  } catch (error) {
+    logger.error('Error updating PROD Supabase', { error });
+    // Continue even if PROD update fails - file was updated
+  }
+
+  // Mark tactic as promoted in SANDBOX database
+  const { error: updateError } = await (sandboxSupabase as any)
     .from('sandbox_tactics')
-    .update({ is_active: true })
+    .update({ is_active: true } as any)
     .eq('id', tacticId);
 
   if (updateError) {
-    logger.error('Error updating tactic status', { error: updateError });
-    // Don't throw - the file was updated, just log the DB error
+    logger.error('Error updating tactic status in SANDBOX', { error: updateError });
+    // Don't throw - the file and PROD were updated, just log the DB error
   }
 
   logger.info('Tactic promoted to production', {
     tacticId,
     battleId: tactic.battle_id,
     priority: tactic.priority,
+    prodUpdated: true,
   });
 }
 
@@ -216,6 +265,12 @@ ${tactic.tactic_text}
  * Flag high-score battles and extract tactics
  */
 export async function flagHighScoreBattles(): Promise<Tactic[]> {
+  const { supabaseAdmin } = await import('./supabase');
+  if (!supabaseAdmin) {
+    logger.error('Supabase admin client not available');
+    throw new Error('Database not available');
+  }
+
   const highScoreBattles = await getHighScoreBattles();
   logger.info('Found high-score battles', { count: highScoreBattles.length });
 
@@ -242,7 +297,7 @@ export async function flagHighScoreBattles(): Promise<Tactic[]> {
     }
 
     // Create tactic record
-    const { data: tactic, error: tacticError } = await supabaseAdmin
+    const { data: tactic, error: tacticError } = await (supabaseAdmin as any)
       .from('sandbox_tactics')
       .insert({
         battle_id: battle.id,
@@ -250,7 +305,7 @@ export async function flagHighScoreBattles(): Promise<Tactic[]> {
         is_synthetic: true,
         priority: 5, // Default priority for Prompt Merger
         is_active: false, // Not promoted yet
-      })
+      } as any)
       .select()
       .single();
 
@@ -285,6 +340,7 @@ export async function autoSaveGoldenSamples(): Promise<{
   saved: number;
   suggested: number;
 }> {
+  const { supabaseAdmin } = await import('./supabase');
   if (!supabaseAdmin) {
     throw new Error('Supabase admin client not available');
   }
@@ -316,7 +372,7 @@ export async function autoSaveGoldenSamples(): Promise<{
     }
 
     // Save as golden sample with higher priority
-    const { data: tactic, error: tacticError } = await supabaseAdmin
+    const { data: tactic, error: tacticError } = await (supabaseAdmin as any)
       .from('sandbox_tactics')
       .insert({
         battle_id: battle.id,
@@ -326,7 +382,7 @@ export async function autoSaveGoldenSamples(): Promise<{
         is_active: false, // Not auto-promoted, needs review
         is_golden_sample: true,
         suggested_at: new Date().toISOString(),
-      })
+      } as any)
       .select()
       .single();
 
@@ -400,6 +456,7 @@ export async function autoPromoteHighScoreTactics(): Promise<{
  * Get all promoted tactics
  */
 export async function getPromotedTactics(): Promise<Tactic[]> {
+  const { supabaseAdmin } = await import('./supabase');
   if (!supabaseAdmin) {
     throw new Error('Supabase admin client not available');
   }
@@ -422,6 +479,7 @@ export async function getPromotedTactics(): Promise<Tactic[]> {
  * Get tactics ready for promotion (high-score battles, not yet promoted)
  */
 export async function getTacticsReadyForPromotion(): Promise<Tactic[]> {
+  const { supabaseAdmin } = await import('./supabase');
   if (!supabaseAdmin) {
     throw new Error('Supabase admin client not available');
   }

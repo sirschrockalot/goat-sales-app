@@ -6,6 +6,8 @@
 
 import type { GauntletLevel } from './gauntletLevels';
 
+export type { GauntletLevel };
+
 export interface Objection {
   text: string;
   context: string; // When to use this objection

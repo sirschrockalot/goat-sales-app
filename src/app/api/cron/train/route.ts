@@ -4,10 +4,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { runBattleLoop } from '../../../../scripts/autonomousBattle';
 import logger from '@/lib/logger';
-import { getEnvironmentConfig, assertSandboxMode } from '../../../../config/environments';
+import { getEnvironmentConfig } from '@/lib/env-manager';
 import { getAppConfig } from '@/lib/config';
+
+// assertSandboxMode will be imported dynamically or we'll use env-manager's assertEnvironment
 
 // Configuration
 const DEFAULT_BATCH_SIZE = 5; // Number of battles per cron execution
@@ -120,11 +121,18 @@ async function runTrainingBatch(batchSize: number): Promise<TrainingBatchResult>
   try {
     // Verify environment
     const config = getEnvironmentConfig();
-    assertSandboxMode(config);
+    // Ensure we're in sandbox mode
+    if (config.environment !== 'sandbox') {
+      throw new Error('Training can only run in sandbox environment');
+    }
 
     // Get app config for concurrency settings
     const appConfig = getAppConfig();
 
+    // Dynamically import runBattleLoop from root scripts (server-side only)
+    const autonomousBattleModule = await (Function('return import("../../../scripts/autonomousBattle.js")')()) as any;
+    const { runBattleLoop } = autonomousBattleModule;
+    
     // Run battle loop with batch size limit and concurrency control
     const results = await runBattleLoop(undefined, batchSize, {
       batchSize,
@@ -132,10 +140,10 @@ async function runTrainingBatch(batchSize: number): Promise<TrainingBatchResult>
       delayBetweenBattles: parseInt(process.env.DELAY_BETWEEN_BATTLES_MS || '1000', 10),
     });
 
-    const totalCost = results.reduce((sum, r) => sum + r.cost, 0);
+    const totalCost = results.reduce((sum: number, r: any) => sum + r.cost, 0);
     const averageScore =
       results.length > 0
-        ? results.reduce((sum, r) => sum + r.score.totalScore, 0) / results.length
+        ? results.reduce((sum: number, r: any) => sum + r.score.totalScore, 0) / results.length
         : 0;
 
     const batchResult: TrainingBatchResult = {
@@ -207,7 +215,6 @@ export async function GET(request: NextRequest) {
     );
     const batchSize = Math.min(Math.max(1, requestedBatchSize), appConfig.training.maxBatchSize || MAX_BATCH_SIZE);
 
-    const appConfig = getAppConfig();
     const maxExecutionTime = appConfig.training.maxExecutionTimeMs || MAX_EXECUTION_TIME_MS;
 
     logger.info('Training cron job triggered', { batchSize, maxExecutionTime });

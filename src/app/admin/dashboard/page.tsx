@@ -5,6 +5,8 @@
  * Admin view for tracking team performance and curating rebuttals
  */
 
+export const dynamic = 'force-dynamic';
+
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
@@ -559,7 +561,9 @@ function MetricCard({ icon: Icon, label, value, color }: MetricCardProps) {
           className="w-12 h-12 rounded-xl flex items-center justify-center"
           style={{ backgroundColor: `${color}20` }}
         >
-          <Icon className="w-6 h-6" style={{ color }} />
+          <div style={{ color }}>
+            <Icon className="w-6 h-6" />
+          </div>
         </div>
       </div>
       <div className="text-3xl font-bold mb-1" style={{ color }}>

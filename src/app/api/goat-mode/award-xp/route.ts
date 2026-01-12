@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin, createSupabaseClient } from '@/lib/supabase';
+import { createSupabaseClient } from '@/lib/supabase';
 import logger from '@/lib/logger';
 
 const BASE_XP_PER_SECOND = 1; // Base XP per second of call
@@ -44,6 +44,12 @@ export async function POST(request: NextRequest) {
     
     const totalXP = baseXP + goatModeXP + proModeXP + bonusXP;
 
+    // Get supabaseAdmin
+    const { supabaseAdmin } = await import('@/lib/supabase');
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Database not available' }, { status: 500 });
+    }
+
     // Get current profile
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
@@ -58,13 +64,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const profileData = profile as any;
+
     // Update XP and Goat Mode time
-    const { error: updateError } = await supabaseAdmin
+    const { error: updateError } = await (supabaseAdmin as any)
       .from('profiles')
       .update({
-        experience_points: (profile.experience_points || 0) + totalXP,
-        goat_mode_time: (profile.goat_mode_time || 0) + Math.floor(goatModeDuration),
-      })
+        experience_points: (profileData.experience_points || 0) + totalXP,
+        goat_mode_time: (profileData.goat_mode_time || 0) + Math.floor(goatModeDuration),
+      } as any)
       .eq('id', userId);
 
     if (updateError) {
@@ -84,7 +92,7 @@ export async function POST(request: NextRequest) {
         proModeXP,
         bonusXP,
       },
-      newTotalXP: (profile.experience_points || 0) + totalXP,
+      newTotalXP: (profileData.experience_points || 0) + totalXP,
     });
   } catch (error) {
     logger.error('Error awarding XP', { error });

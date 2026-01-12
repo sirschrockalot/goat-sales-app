@@ -15,19 +15,11 @@
   },
   "crons": [
     {
-      "path": "/api/cron/daily-recap",
-      "schedule": "0 8 * * *"
-    },
-    {
-      "path": "/api/cron/scout-scan",
-      "schedule": "*/5 * * * *"
-    },
-    {
       "path": "/api/cron/train",
-      "schedule": "*/30 * * * *"
+      "schedule": "0 14 * * *"
     },
     {
-      "path": "/api/cron/daily-audit",
+      "path": "/api/cron/daily-recap",
       "schedule": "0 8 * * *"
     }
   ],

@@ -11,7 +11,7 @@
  * - Reduces Supabase storage costs
  */
 
-import { supabaseAdmin } from './supabase';
+// supabaseAdmin imported dynamically
 import logger from './logger';
 
 // Protected tags that prevent archiving
@@ -78,6 +78,7 @@ function isProtected(record: any): { protected: boolean; reason: string } {
  * Archive a single call record
  */
 async function archiveCallRecord(call: any): Promise<boolean> {
+  const { supabaseAdmin } = await import('./supabase');
   if (!supabaseAdmin) {
     logger.error('Supabase admin client not available');
     return false;
@@ -85,7 +86,7 @@ async function archiveCallRecord(call: any): Promise<boolean> {
 
   try {
     // Insert into archive table
-    const { error: archiveError } = await supabaseAdmin
+    const { error: archiveError } = await (supabaseAdmin as any)
       .from('call_logs_archive')
       .insert({
         id: call.id,
@@ -111,7 +112,7 @@ async function archiveCallRecord(call: any): Promise<boolean> {
         ended_at: call.ended_at,
         original_id: call.id,
         archive_reason: `Age > ${ARCHIVE_CONFIG.ageThresholdDays} days, no protected tags`,
-      });
+      } as any);
 
     if (archiveError) {
       logger.error('Error archiving call', { callId: call.id, error: archiveError });
@@ -119,7 +120,7 @@ async function archiveCallRecord(call: any): Promise<boolean> {
     }
 
     // Delete from original table after successful archive
-    const { error: deleteError } = await supabaseAdmin
+    const { error: deleteError } = await (supabaseAdmin as any)
       .from('calls')
       .delete()
       .eq('id', call.id);
@@ -141,6 +142,7 @@ async function archiveCallRecord(call: any): Promise<boolean> {
  * Get records eligible for archiving
  */
 async function getEligibleRecords(limit: number = ARCHIVE_CONFIG.batchSize): Promise<any[]> {
+  const { supabaseAdmin } = await import('./supabase');
   if (!supabaseAdmin) {
     return [];
   }
@@ -263,6 +265,7 @@ export async function tagAsProtected(
   callId: string,
   tag: typeof PROTECTED_TAGS[number]
 ): Promise<boolean> {
+  const { supabaseAdmin } = await import('./supabase');
   if (!supabaseAdmin) {
     return false;
   }
@@ -275,13 +278,14 @@ export async function tagAsProtected(
       .eq('id', callId)
       .single();
 
-    if (fetchError || !call) {
+    const callData = call as any;
+    if (fetchError || !callData) {
       logger.error('Error fetching call for tagging', { callId, error: fetchError });
       return false;
     }
 
     // Add protected tag to metadata
-    const currentMetadata = call.metadata || {};
+    const currentMetadata = callData.metadata || {};
     const tags = currentMetadata.protected_tags || [];
     
     if (!tags.includes(tag)) {
@@ -294,9 +298,9 @@ export async function tagAsProtected(
     };
 
     // Update record
-    const { error: updateError } = await supabaseAdmin
+    const { error: updateError } = await (supabaseAdmin as any)
       .from('calls')
-      .update({ metadata: updatedMetadata })
+      .update({ metadata: updatedMetadata } as any)
       .eq('id', callId);
 
     if (updateError) {
@@ -316,14 +320,15 @@ export async function tagAsProtected(
  * Set is_permanent_knowledge flag for a call
  */
 export async function setPermanentKnowledge(callId: string, isPermanent: boolean): Promise<boolean> {
+  const { supabaseAdmin } = await import('./supabase');
   if (!supabaseAdmin) {
     return false;
   }
 
   try {
-    const { error } = await supabaseAdmin
+    const { error } = await (supabaseAdmin as any)
       .from('calls')
-      .update({ is_permanent_knowledge: isPermanent })
+      .update({ is_permanent_knowledge: isPermanent } as any)
       .eq('id', callId);
 
     if (error) {
@@ -348,6 +353,7 @@ export async function getArchiveStats(): Promise<{
   protectedCalls: number;
   oldestUnprotectedCall: string | null;
 }> {
+  const { supabaseAdmin } = await import('./supabase');
   if (!supabaseAdmin) {
     return {
       totalCalls: 0,
@@ -360,23 +366,23 @@ export async function getArchiveStats(): Promise<{
   try {
     const [totalResult, archivedResult, protectedResult, oldestResult] = await Promise.all([
       // Total calls
-      supabaseAdmin
+      (supabaseAdmin as any)
         .from('calls')
         .select('id', { count: 'exact', head: true }),
       
       // Archived calls
-      supabaseAdmin
+      (supabaseAdmin as any)
         .from('call_logs_archive')
         .select('id', { count: 'exact', head: true }),
       
       // Protected calls
-      supabaseAdmin
+      (supabaseAdmin as any)
         .from('calls')
         .select('id', { count: 'exact', head: true })
         .or('is_permanent_knowledge.eq.true,metadata->protected_tags.not.is.null'),
       
       // Oldest unprotected call
-      supabaseAdmin
+      (supabaseAdmin as any)
         .from('calls')
         .select('created_at')
         .eq('is_permanent_knowledge', false)

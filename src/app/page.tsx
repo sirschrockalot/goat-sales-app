@@ -5,6 +5,8 @@
  * Main entry point matching the mockup design
  */
 
+export const dynamic = 'force-dynamic';
+
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import HomeScreen from '@/components/HomeScreen';

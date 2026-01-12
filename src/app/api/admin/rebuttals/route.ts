@@ -4,11 +4,17 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+
 import logger from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
+    // Get supabaseAdmin
+    const { supabaseAdmin } = await import('@/lib/supabase');
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Database not available' }, { status: 500 });
+    }
+
     // Get rebuttals from calls with score > 90
     const { data: highScoreCalls } = await supabaseAdmin
       .from('calls')
@@ -21,7 +27,7 @@ export async function GET(request: NextRequest) {
 
     // Get user names
     const rebuttals = await Promise.all(
-      (highScoreCalls || []).map(async (call) => {
+      ((highScoreCalls as any[]) || []).map(async (call: any) => {
         const { data: profile } = await supabaseAdmin
           .from('profiles')
           .select('name, email')
@@ -36,13 +42,13 @@ export async function GET(request: NextRequest) {
           .single();
 
         return {
-          id: existingRebuttal?.id || null,
+          id: (existingRebuttal as any)?.id || null,
           callId: call.id,
           rebuttalText: call.rebuttal_of_the_day,
           score: call.goat_score,
-          userName: profile?.name || profile?.email || 'Unknown',
+          userName: (profile as any)?.name || (profile as any)?.email || 'Unknown',
           createdAt: call.created_at,
-          isVerified: existingRebuttal?.is_verified || false,
+          isVerified: (existingRebuttal as any)?.is_verified || false,
         };
       })
     );
@@ -59,6 +65,12 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Get supabaseAdmin
+    const { supabaseAdmin } = await import('@/lib/supabase');
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Database not available' }, { status: 500 });
+    }
+
     const body = await request.json();
     const { rebuttalId } = body;
 
@@ -70,9 +82,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify the rebuttal
-    const { error } = await supabaseAdmin
+    const { error } = await (supabaseAdmin as any)
       .from('rebuttals')
-      .update({ is_verified: true })
+      .update({ is_verified: true } as any)
       .eq('id', rebuttalId);
 
     if (error) {
@@ -84,7 +96,9 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
+    const body = await request.json().catch(() => ({}));
+    const rebuttalId = (body as any)?.rebuttalId;
     logger.error('Error verifying rebuttal', { error, rebuttalId });
     return NextResponse.json(
       { error: 'Internal server error' },

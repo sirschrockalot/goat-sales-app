@@ -7,9 +7,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import logger from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
+  const searchParams = request.nextUrl.searchParams;
+  let assistantId: string | null = null;
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const assistantId = searchParams.get('assistantId');
+    assistantId = searchParams.get('assistantId');
 
     if (!assistantId) {
       return NextResponse.json(
@@ -64,7 +65,7 @@ export async function GET(request: NextRequest) {
       error: assistant.error,
     });
   } catch (error) {
-    logger.error('Error verifying assistant', { error, assistantId: searchParams.get('assistantId') });
+    logger.error('Error verifying assistant', { error, assistantId });
     return NextResponse.json(
       {
         exists: false,

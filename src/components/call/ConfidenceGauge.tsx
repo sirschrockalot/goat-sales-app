@@ -129,21 +129,19 @@ export default function ConfidenceGauge({
           <motion.line
             x1={centerX}
             y1={centerY}
+            x2={useTransform(spring, (s) => {
+              const angleDeg = s * 1.8 - 90; // 0-100 score to -90 to 90 degrees
+              const rad = (angleDeg * Math.PI) / 180;
+              return centerX + needleLength * Math.cos(rad);
+            })}
+            y2={useTransform(spring, (s) => {
+              const angleDeg = s * 1.8 - 90;
+              const rad = (angleDeg * Math.PI) / 180;
+              return centerY - needleLength * Math.sin(rad);
+            })}
             stroke={color}
             strokeWidth="4"
             strokeLinecap="round"
-            style={{
-              x2: useTransform(spring, (s) => {
-                const angleDeg = s * 1.8 - 90; // 0-100 score to -90 to 90 degrees
-                const rad = (angleDeg * Math.PI) / 180;
-                return centerX + needleLength * Math.cos(rad);
-              }),
-              y2: useTransform(spring, (s) => {
-                const angleDeg = s * 1.8 - 90;
-                const rad = (angleDeg * Math.PI) / 180;
-                return centerY - needleLength * Math.sin(rad);
-              }),
-            }}
           />
 
           {/* Center dot */}

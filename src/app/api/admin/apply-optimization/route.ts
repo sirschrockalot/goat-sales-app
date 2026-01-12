@@ -4,7 +4,6 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
 import { getUserFromRequest } from '@/lib/getUserFromRequest';
 import logger from '@/lib/logger';
 
@@ -17,13 +16,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify user is admin
+    const { supabaseAdmin } = await import('@/lib/supabase');
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Database not available' }, { status: 500 });
+    }
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
       .select('is_admin')
       .eq('id', user.id)
       .single();
 
-    if (profileError || !profile?.is_admin) {
+    if (profileError || !profile || !(profile as any).is_admin) {
       return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
     }
 
@@ -85,7 +88,7 @@ export async function POST(request: NextRequest) {
 
     // Apply the suggested tweak (simple append for now - could be more sophisticated)
     // In a production system, you might want to parse and intelligently merge the prompt
-    const updatedPrompt = `${currentPrompt}\n\n[OPTIMIZATION APPLIED ${new Date().toISOString()}]\n${optimization.suggested_prompt_tweak}`;
+    const updatedPrompt = `${currentPrompt}\n\n[OPTIMIZATION APPLIED ${new Date().toISOString()}]\n${(optimization as any).suggested_prompt_tweak}`;
 
     // Update the assistant via Vapi API
     const updateResponse = await fetch(`https://api.vapi.ai/assistant/${assistantId}`, {
@@ -117,7 +120,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Mark optimization as applied
-    const { error: updateError } = await supabaseAdmin
+    const { error: updateError } = await (supabaseAdmin as any)
       .from('ai_optimizations')
       .update({
         applied: true,

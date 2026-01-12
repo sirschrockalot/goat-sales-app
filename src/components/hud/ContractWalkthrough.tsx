@@ -31,6 +31,7 @@ export default function ContractWalkthrough({
   const [currentClause, setCurrentClause] = useState<ContractClause | null>(null);
   const [highlightedSection, setHighlightedSection] = useState<string | null>(null);
   const [completedSections, setCompletedSections] = useState<Set<string>>(new Set());
+  const [objectionTip, setObjectionTip] = useState<ObjectionTip | null>(null);
   const contract = getContractKnowledge();
 
   useEffect(() => {
@@ -267,30 +268,6 @@ export default function ContractWalkthrough({
             </motion.div>
           ))}
         </div>
-
-        {/* Live Objection Tip (for Clause 17) */}
-        <AnimatePresence>
-          {objectionTip && objectionTip.isActive && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="mt-4 rounded-lg border-2 border-yellow-500/50 bg-yellow-500/20 p-4"
-            >
-              <div className="flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <h4 className="text-sm font-bold text-yellow-400 mb-1">
-                    Live Objection Tip
-                  </h4>
-                  <p className="text-sm text-white leading-relaxed">
-                    {objectionTip.tip}
-                  </p>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
 
         {/* Live Objection Tip (for Clause 17) */}
         <AnimatePresence>

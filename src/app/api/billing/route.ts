@@ -19,7 +19,7 @@ import {
   getProfitMargin,
 } from '@/lib/billingService';
 import { getUserFromRequest } from '@/lib/getUserFromRequest';
-import { supabaseAdmin } from '@/lib/supabase';
+
 
 export async function GET(request: NextRequest) {
   try {
@@ -30,13 +30,17 @@ export async function GET(request: NextRequest) {
     }
 
     // Verify user is admin
+    const { supabaseAdmin } = await import('@/lib/supabase');
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Database not available' }, { status: 500 });
+    }
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
       .select('is_admin')
       .eq('id', user.id)
       .single();
 
-    if (profileError || !profile?.is_admin) {
+    if (profileError || !profile || !(profile as any).is_admin) {
       return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
     }
 

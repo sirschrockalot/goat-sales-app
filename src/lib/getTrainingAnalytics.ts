@@ -3,7 +3,6 @@
  * Aggregates training progress data for admin dashboard
  */
 
-import { supabaseAdmin } from './supabase';
 import logger from './logger';
 
 export interface RepAnalytics {
@@ -147,6 +146,12 @@ function calculateGateMastery(
  * Get training analytics for all reps
  */
 export async function getTrainingAnalytics(): Promise<TrainingAnalytics> {
+  const { supabaseAdmin } = await import('./supabase');
+  if (!supabaseAdmin) {
+    logger.error('Supabase admin client not available');
+    throw new Error('Database not available');
+  }
+
   try {
     // OPTIMIZED: Fetch all profiles with their assigned paths in one query
     const { data: profiles, error: profilesError } = await supabaseAdmin
@@ -158,7 +163,8 @@ export async function getTrainingAnalytics(): Promise<TrainingAnalytics> {
       throw new Error(`Failed to fetch profiles: ${profilesError.message}`);
     }
 
-    if (!profiles || profiles.length === 0) {
+    const profilesData = (profiles as any[]) || [];
+    if (profilesData.length === 0) {
       return {
         reps: [],
         pathComparison: [],
@@ -178,8 +184,9 @@ export async function getTrainingAnalytics(): Promise<TrainingAnalytics> {
     }
 
     // OPTIMIZED: Pre-group calls by user_id to avoid repeated filtering
-    const callsByUserId = new Map<string, typeof calls>();
-    (calls || []).forEach((call) => {
+    const callsData = (calls as any[]) || [];
+    const callsByUserId = new Map<string, any[]>();
+    callsData.forEach((call: any) => {
       if (!call.user_id) return;
       if (!callsByUserId.has(call.user_id)) {
         callsByUserId.set(call.user_id, []);
@@ -188,13 +195,13 @@ export async function getTrainingAnalytics(): Promise<TrainingAnalytics> {
     });
 
     // Process each rep (now using pre-grouped calls)
-    const reps: RepAnalytics[] = profiles.map((profile) => {
+    const reps: RepAnalytics[] = profilesData.map((profile: any) => {
         const userCalls = callsByUserId.get(profile.id) || [];
-        const scoredCalls = userCalls.filter((call) => call.goat_score !== null);
+        const scoredCalls = userCalls.filter((call: any) => call.goat_score !== null);
 
         // Calculate metrics
         const totalCalls = scoredCalls.length;
-        const totalScore = scoredCalls.reduce((sum, call) => sum + (call.goat_score || 0), 0);
+        const totalScore = scoredCalls.reduce((sum: number, call: any) => sum + (call.goat_score || 0), 0);
         const averageScore = totalCalls > 0 ? Math.round(totalScore / totalCalls) : 0;
         const totalXP = profile.experience_points || 0;
         const gauntletLevel = profile.gauntlet_level || 1;
@@ -280,7 +287,7 @@ export async function getTrainingAnalytics(): Promise<TrainingAnalytics> {
       allGateStats[gateName] = { passes: 0, attempts: 0 };
     });
 
-    (calls || []).forEach((call) => {
+    callsData.forEach((call: any) => {
       const gates = call.logic_gates as Array<{ name: string; passed: boolean }> | null;
       if (!gates || !Array.isArray(gates)) return;
 

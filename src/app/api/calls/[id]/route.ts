@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+
 import { judgeCall } from '@/lib/judge';
 import { analyzeDeviation } from '@/lib/analyzeDeviation';
 import logger from '@/lib/logger';
@@ -13,7 +13,7 @@ import { rateLimit, getClientIP } from '@/lib/rateLimit';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Rate limiting for grading endpoint
@@ -37,7 +37,13 @@ export async function GET(
       );
     }
 
-    const callId = params.id;
+    const { id: callId } = await params;
+
+    // Get supabaseAdmin
+    const { supabaseAdmin } = await import('@/lib/supabase');
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Database not available' }, { status: 500 });
+    }
 
     const { data, error } = await supabaseAdmin
       .from('calls')
@@ -54,24 +60,25 @@ export async function GET(
     }
 
     // Generate signed URL for recording if it exists
-    if (data.recording_url) {
+    const callData: any = data as any;
+    if (callData.recording_url) {
       try {
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
         
         // If it's a Supabase storage URL, create a signed URL
-        if (data.recording_url.includes(supabaseUrl)) {
-          const urlMatch = data.recording_url.match(/\/storage\/v1\/object\/(public|sign)\/([^\/]+)\/(.+)/);
+        if (callData.recording_url.includes(supabaseUrl)) {
+          const urlMatch = callData.recording_url.match(/\/storage\/v1\/object\/(public|sign)\/([^\/]+)\/(.+)/);
           
           if (urlMatch) {
             const [, , bucket, path] = urlMatch;
             
             // Generate signed URL with 60 minute expiration
-            const { data: signedUrlData, error: signedUrlError } = await supabaseAdmin.storage
+            const { data: signedUrlData, error: signedUrlError } = await supabaseAdmin!.storage
               .from(bucket)
               .createSignedUrl(path, 3600); // 60 minutes
 
             if (!signedUrlError && signedUrlData) {
-              data.recording_url = signedUrlData.signedUrl;
+              callData.recording_url = signedUrlData.signedUrl;
             }
           }
         }
@@ -83,15 +90,15 @@ export async function GET(
     }
 
     // If goat_score is missing, trigger grading
-    if (!data.goat_score && data.transcript) {
+    if (!callData.goat_score && callData.transcript) {
       
       try {
-        const gradingResult = await judgeCall(data.transcript);
+        const gradingResult = await judgeCall(callData.transcript);
         
         // Analyze script deviation if not already present
-        let deviationAnalysis = data.script_adherence;
-        if (!deviationAnalysis && data.transcript) {
-          deviationAnalysis = await analyzeDeviation(data.transcript);
+        let deviationAnalysis = callData.script_adherence;
+        if (!deviationAnalysis && callData.transcript) {
+          deviationAnalysis = await analyzeDeviation(callData.transcript);
         }
 
         // Calculate logic gates array
@@ -102,11 +109,11 @@ export async function GET(
           },
           {
             name: 'Fact-Finding (The Why)',
-            passed: gradingResult.logicGates.why === 'found',
+            passed: gradingResult.logicGates.motivation === 'found',
           },
           {
             name: 'Property Condition (The House)',
-            passed: gradingResult.logicGates.propertyCondition === 'pass',
+            passed: gradingResult.logicGates.condition === 'pass',
           },
           {
             name: 'Tone',
@@ -115,12 +122,12 @@ export async function GET(
           },
           {
             name: 'The Clinch',
-            passed: gradingResult.logicGates.clinch === 'pass',
+            passed: gradingResult.logicGates.commitment === 'pass',
           },
         ];
 
         // Update the call record
-        const { error: updateError } = await supabaseAdmin
+        const { error: updateError } = await (supabaseAdmin as any)
           .from('calls')
           .update({
             goat_score: gradingResult.goatScore,
@@ -128,18 +135,18 @@ export async function GET(
             logic_gates: logicGates,
             feedback: gradingResult.feedback,
             script_adherence: deviationAnalysis, // Update script adherence
-          })
+          } as any)
           .eq('id', callId);
 
         if (updateError) {
           logger.error('Error updating call with grade', { error: updateError, callId });
         } else {
-          // Update data object with new values
-          data.goat_score = gradingResult.goatScore;
-          data.rebuttal_of_the_day = gradingResult.rebuttalOfTheDay;
-          data.logic_gates = logicGates;
-          data.feedback = gradingResult.feedback;
-          data.script_adherence = deviationAnalysis; // Store deviation analysis
+          // Update callData object with new values
+          callData.goat_score = gradingResult.goatScore;
+          callData.rebuttal_of_the_day = gradingResult.rebuttalOfTheDay;
+          callData.logic_gates = logicGates;
+          callData.feedback = gradingResult.feedback;
+          callData.script_adherence = deviationAnalysis; // Store deviation analysis
         }
       } catch (gradingError) {
         logger.error('Error grading call', { error: gradingError, callId });
@@ -147,9 +154,9 @@ export async function GET(
       }
     }
 
-    return NextResponse.json(data);
+    return NextResponse.json(callData);
   } catch (error) {
-    logger.error('Error in GET /api/calls/[id]', { error, callId });
+    logger.error('Error in GET /api/calls/[id]', { error });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

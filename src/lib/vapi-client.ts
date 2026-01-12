@@ -5,7 +5,30 @@
 
 import Vapi from '@vapi-ai/web';
 import { getAmbientNoiseConfig } from '@/lib/vapiConfig';
-import logger from '@/lib/logger';
+
+// Logger - use conditional import to avoid winston in client bundles
+const getLogger = () => {
+  if (typeof window === 'undefined') {
+    // Server-side: use winston logger (dynamic import to avoid bundling in client)
+    try {
+      return require('./logger').default;
+    } catch {
+      // Fallback to console if logger fails to load
+      return {
+        error: (msg: string, meta?: any) => console.error(`[ERROR] ${msg}`, meta),
+        info: (msg: string, meta?: any) => console.log(`[INFO] ${msg}`, meta),
+        warn: (msg: string, meta?: any) => console.warn(`[WARN] ${msg}`, meta),
+      };
+    }
+  }
+  // Client-side: use console
+  return {
+    error: (msg: string, meta?: any) => console.error(`[ERROR] ${msg}`, meta),
+    info: (msg: string, meta?: any) => console.log(`[INFO] ${msg}`, meta),
+    warn: (msg: string, meta?: any) => console.warn(`[WARN] ${msg}`, meta),
+  };
+};
+const logger = getLogger();
 
 export type PersonaMode = 'acquisition' | 'disposition';
 
@@ -127,7 +150,7 @@ export class VapiClient {
     });
 
     // Listen for transcript events specifically (Vapi SDK may emit these separately)
-    this.vapi.on('transcript', (transcript: any) => {
+    this.vapi.on('transcript' as any, (transcript: any) => {
       logger.debug('Vapi transcript event', { transcript });
       
       if (transcript) {
@@ -147,20 +170,20 @@ export class VapiClient {
     });
 
     // Listen for user speech events (if available)
-    this.vapi.on('user-speech-start', (data: any) => {
+    this.vapi.on('user-speech-start' as any, (data: any) => {
       logger.debug('User speech started', { data });
     });
 
-    this.vapi.on('user-speech-end', (data: any) => {
+    this.vapi.on('user-speech-end' as any, (data: any) => {
       logger.debug('User speech ended', { data });
     });
 
     // Listen for assistant speech events
-    this.vapi.on('assistant-speech-start', (data: any) => {
+    this.vapi.on('assistant-speech-start' as any, (data: any) => {
       logger.debug('Assistant speech started', { data });
     });
 
-    this.vapi.on('assistant-speech-end', (data: any) => {
+    this.vapi.on('assistant-speech-end' as any, (data: any) => {
       logger.debug('Assistant speech ended', { data });
     });
 
@@ -202,7 +225,7 @@ export class VapiClient {
     }
 
     // Listen for call start
-    this.vapi.on('call-start', () => {
+    this.vapi.on('call-start' as any, () => {
       this.currentStatus = {
         ...this.currentStatus,
         isActive: true,
@@ -212,7 +235,7 @@ export class VapiClient {
     });
 
     // Listen for call end
-    this.vapi.on('call-end', (data?: any) => {
+    this.vapi.on('call-end' as any, (data?: any) => {
       logger.info('Call ended', { data });
       this.currentStatus = {
         ...this.currentStatus,
@@ -223,7 +246,7 @@ export class VapiClient {
     });
 
     // Listen for status updates (includes ejection errors)
-    this.vapi.on('status', (status: any) => {
+    this.vapi.on('status' as any, (status: any) => {
       logger.debug('Vapi status update', { status });
       // Handle "ejection" or "meeting ended" errors
       if (status?.message?.includes('ejection') || status?.message?.includes('Meeting has ended')) {
@@ -238,7 +261,7 @@ export class VapiClient {
     });
 
     // Listen for errors
-    this.vapi.on('error', (error: any) => {
+    this.vapi.on('error' as any, (error: any) => {
       // Log full error details for debugging - capture everything
       const errorDetails = {
         rawError: error,

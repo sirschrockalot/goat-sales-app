@@ -4,8 +4,8 @@
  * Wrapper for neighborhood context injection before calls
  */
 
-import { prepareCallWithNeighborhoodContext } from '../src/lib/neighborhoodPulse';
-import logger from '../src/lib/logger';
+import { prepareCallWithNeighborhoodContext } from '../lib/neighborhoodPulse';
+import logger from '../lib/logger';
 import * as fs from 'fs-extra';
 import * as path from 'path';
 
@@ -188,4 +188,3 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   main();
 }
 
-export { getBattleIntelligence, prepareSystemPromptWithBattleIntelligence };

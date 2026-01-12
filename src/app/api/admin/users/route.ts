@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin, createSupabaseClient } from '@/lib/supabase';
+import { createSupabaseClient } from '@/lib/supabase';
 import logger from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
@@ -21,6 +21,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const { supabaseAdmin } = await import('@/lib/supabase');
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Database not available' }, { status: 500 });
+    }
     // SECURITY: Strictly check if user is admin
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
@@ -28,7 +32,7 @@ export async function GET(request: NextRequest) {
       .eq('id', user.id)
       .single();
 
-    if (profileError || !profile || !profile.is_admin) {
+    if (profileError || !profile || !(profile as any).is_admin) {
       logger.warn('Non-admin user attempted to access user management', { userId: user.id });
       return NextResponse.json(
         { error: 'Forbidden - Admin access required' },
@@ -73,7 +77,7 @@ export async function GET(request: NextRequest) {
     // Create a map of user_id to last active date
     const lastActiveMap = new Map<string, string>();
     if (lastActiveData) {
-      lastActiveData.forEach((call) => {
+      (lastActiveData as any[]).forEach((call: any) => {
         if (!lastActiveMap.has(call.user_id)) {
           lastActiveMap.set(call.user_id, call.created_at);
         }
@@ -81,9 +85,9 @@ export async function GET(request: NextRequest) {
     }
 
     // Separate pending invites (users without confirmed email) from active users
-    const pendingInvites = allUsers
-      .filter((authUser) => !authUser.email_confirmed_at)
-      .map((authUser) => ({
+    const pendingInvites = (allUsers as any[])
+      .filter((authUser: any) => !authUser.email_confirmed_at)
+      .map((authUser: any) => ({
         id: authUser.id,
         email: authUser.email || 'No email',
         invitedAt: authUser.created_at,
@@ -91,10 +95,10 @@ export async function GET(request: NextRequest) {
       }));
 
     // Map active users with profile data
-    const activeUsers = allUsers
-      .filter((authUser) => authUser.email_confirmed_at)
-      .map((authUser) => {
-        const profile = profiles?.find((p) => p.id === authUser.id);
+    const activeUsers = (allUsers as any[])
+      .filter((authUser: any) => authUser.email_confirmed_at)
+      .map((authUser: any) => {
+        const profile = (profiles as any[])?.find((p: any) => p.id === authUser.id);
         const lastActive = lastActiveMap.get(authUser.id);
 
         return {

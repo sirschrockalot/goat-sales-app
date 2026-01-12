@@ -6,6 +6,8 @@
  * Matches the 4th screen in the mockup
  */
 
+export const dynamic = 'force-dynamic';
+
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -17,7 +19,6 @@ import LevelUpOverlay from '@/components/effects/LevelUpOverlay';
 import { getSoundboard } from '@/lib/soundboard';
 import { getGauntletLevel } from '@/lib/gauntletLevels';
 import { useAuth } from '@/contexts/AuthContext';
-import { useRouter } from 'next/navigation';
 import type { DeviationAnalysis } from '@/lib/analyzeDeviation';
 
 interface CallResult {
@@ -637,6 +638,7 @@ export default function CallDebriefPage() {
             {sharing ? 'Sharing...' : 'Share Rebuttal to Community'}
           </motion.button>
         )}
+      </div>
       </div>
     </ErrorBoundary>
   );

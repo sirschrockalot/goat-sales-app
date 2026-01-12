@@ -3,7 +3,14 @@
  * Manages audio feedback for gamification
  */
 
-import logger from './logger';
+// Logger - conditional to avoid winston in client bundles
+const logger = typeof window === 'undefined' 
+  ? require('./logger').default 
+  : {
+      error: (msg: string, meta?: any) => console.error(`[ERROR] ${msg}`, meta),
+      info: (msg: string, meta?: any) => console.log(`[INFO] ${msg}`, meta),
+      warn: (msg: string, meta?: any) => console.warn(`[WARN] ${msg}`, meta),
+    };
 
 class Soundboard {
   private audioContext: AudioContext | null = null;

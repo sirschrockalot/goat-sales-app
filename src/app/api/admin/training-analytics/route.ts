@@ -52,6 +52,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const { supabaseAdmin } = await import('@/lib/supabase');
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Database not available' }, { status: 500 });
+    }
     // SECURITY: Strictly check if user is admin
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
@@ -59,7 +63,7 @@ export async function GET(request: NextRequest) {
       .eq('id', user.id)
       .single();
 
-    if (profileError || !profile || !profile.is_admin) {
+    if (profileError || !profile || !(profile as any).is_admin) {
       logger.warn('Non-admin user attempted to access training analytics', { userId: user.id });
       return NextResponse.json(
         { error: 'Forbidden - Admin access required' },

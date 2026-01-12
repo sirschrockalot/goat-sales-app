@@ -14,7 +14,8 @@
  * - Profit margin calculation (revenue - costs)
  */
 
-import { supabaseAdmin } from './supabase';
+// supabaseAdmin imported dynamically
+import logger from './logger';
 
 // Apex Stack Rates (per minute)
 const RATES = {
@@ -306,6 +307,7 @@ export async function getVapiUsage(): Promise<{
  * Estimate Vapi usage from call logs (fallback)
  */
 async function estimateVapiUsageFromLogs(startDate: Date, endDate: Date) {
+  const { supabaseAdmin } = await import('./supabase');
   if (!supabaseAdmin) {
     return { totalMinutes: 0, totalCost: 0, callCount: 0 };
   }
@@ -323,7 +325,8 @@ async function estimateVapiUsageFromLogs(startDate: Date, endDate: Date) {
 
   let totalMinutes = 0;
 
-  for (const call of calls) {
+  const callsData = (calls as any[]) || [];
+  for (const call of callsData) {
     if (call.ended_at && call.created_at) {
       const start = new Date(call.created_at);
       const end = new Date(call.ended_at);
@@ -347,6 +350,7 @@ async function estimateVapiUsageFromLogs(startDate: Date, endDate: Date) {
  * Calculate burn rate from last 24 hours of call logs
  */
 export async function calculateBurnRate(): Promise<BurnRateData> {
+  const { supabaseAdmin } = await import('./supabase');
   if (!supabaseAdmin) {
     return {
       totalCost: 0,
@@ -388,7 +392,8 @@ export async function calculateBurnRate(): Promise<BurnRateData> {
   let gpt4oMinutes = 0;
   let elevenlabsMinutes = 0;
 
-  for (const call of calls) {
+  const callsData = (calls as any[]) || [];
+  for (const call of callsData) {
     let durationMinutes = 5; // Default estimate
 
     if (call.ended_at && call.created_at) {
@@ -429,6 +434,7 @@ export async function calculateBurnRate(): Promise<BurnRateData> {
  * Get daily spend for the current day
  */
 export async function getDailySpend(): Promise<DailySpend> {
+  const { supabaseAdmin } = await import('./supabase');
   if (!supabaseAdmin) {
     return {
       date: new Date().toISOString().split('T')[0],
@@ -464,7 +470,8 @@ export async function getDailySpend(): Promise<DailySpend> {
   let gpt4oMinutes = 0;
   let elevenlabsMinutes = 0;
 
-  for (const call of calls) {
+  const callsData = (calls as any[]) || [];
+  for (const call of callsData) {
     let durationMinutes = 5; // Default estimate
 
     if (call.ended_at && call.created_at) {
@@ -498,6 +505,7 @@ export async function getDailySpend(): Promise<DailySpend> {
  * Get top spenders (users or scenarios)
  */
 export async function getTopSpenders(limit: number = 10): Promise<TopSpender[]> {
+  const { supabaseAdmin } = await import('./supabase');
   if (!supabaseAdmin) {
     return [];
   }
@@ -530,7 +538,8 @@ export async function getTopSpenders(limit: number = 10): Promise<TopSpender[]> 
   // Group by user_id
   const userSpend: Map<string, { minutes: number; callCount: number; user: any; scenario?: string }> = new Map();
 
-  for (const call of calls) {
+  const callsData = (calls as any[]) || [];
+  for (const call of callsData) {
     const userId = call.user_id;
     let durationMinutes = 5; // Default estimate
 
@@ -909,6 +918,7 @@ export async function getVercelUsage(): Promise<VercelUsage> {
  * Estimate Vercel usage from call logs (fallback)
  */
 async function estimateVercelUsageFromLogs(): Promise<VercelUsage> {
+  const { supabaseAdmin } = await import('./supabase');
   if (!supabaseAdmin) {
     return {
       fluidComputeHours: 0,
@@ -969,6 +979,7 @@ async function estimateVercelUsageFromLogs(): Promise<VercelUsage> {
  * Check for Vercel bandwidth anomaly (potential bot attack)
  */
 async function checkVercelBandwidthAnomaly(currentBandwidthGB: number, usageData: any): Promise<void> {
+  const { supabaseAdmin } = await import('./supabase');
   if (!supabaseAdmin) {
     return;
   }
@@ -1082,6 +1093,7 @@ export async function getInfrastructureCosts(): Promise<InfrastructureCosts> {
  * Calculate profit margin from signed contracts
  */
 export async function getProfitMargin(): Promise<ProfitMargin> {
+  const { supabaseAdmin } = await import('./supabase');
   if (!supabaseAdmin) {
     return {
       projectedRevenue: 0,
@@ -1111,7 +1123,8 @@ export async function getProfitMargin(): Promise<ProfitMargin> {
 
   // Calculate revenue from signed $82,700 contracts
   // For now, we'll use the standard $82,700 price point
-  const contractsSigned = signedContracts.length;
+  const signedContractsData = (signedContracts as any[]) || [];
+  const contractsSigned = signedContractsData.length;
   const projectedRevenue = contractsSigned * 82700;
 
   // Get total infrastructure costs

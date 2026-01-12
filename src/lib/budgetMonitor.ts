@@ -106,7 +106,7 @@ export async function getTodaySpend(): Promise<number> {
       return 0;
     }
 
-    const totalSpend = (data || []).reduce((sum, log) => sum + (log.cost || 0), 0);
+    const totalSpend = ((data as any[]) || []).reduce((sum: number, log: any) => sum + (log.cost || 0), 0);
     return totalSpend;
   } catch (error) {
     logger.error('Error calculating today spend', { error });
@@ -243,7 +243,7 @@ export async function logCost(
   }
 
   try {
-    const { error } = await supabaseAdmin
+    const { error } = await (supabaseAdmin as any)
       .from('billing_logs')
       .insert({
         provider: costBreakdown.provider,
@@ -255,7 +255,7 @@ export async function logCost(
         env: 'sandbox',
         metadata: metadata || {},
         created_at: new Date().toISOString(),
-      });
+      } as any);
 
     if (error) {
       logger.error('Error logging cost', { error, costBreakdown });
@@ -341,7 +341,7 @@ export async function getBudgetSummary(): Promise<{
       elevenlabs: 0,
     };
 
-    (data || []).forEach((log) => {
+    ((data as any[]) || []).forEach((log: any) => {
       if (log.provider === 'openai') {
         breakdown.openai += log.cost || 0;
       } else if (log.provider === 'vapi') {

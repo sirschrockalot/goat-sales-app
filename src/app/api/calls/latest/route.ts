@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+
 import { getUserFromRequest } from '@/lib/getUserFromRequest';
 import logger from '@/lib/logger';
 
@@ -21,6 +21,12 @@ export async function GET(request: NextRequest) {
     }
 
     const userId = user.id;
+
+    // Get supabaseAdmin
+    const { supabaseAdmin } = await import('@/lib/supabase');
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Database not available' }, { status: 500 });
+    }
 
     const { data, error } = await supabaseAdmin
       .from('calls')

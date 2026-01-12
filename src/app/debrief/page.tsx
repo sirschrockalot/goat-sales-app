@@ -5,6 +5,8 @@
  * Shows performance review with grade, logic gates, and AI coach feedback
  */
 
+export const dynamic = 'force-dynamic';
+
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useVapi } from '@/contexts/VapiContext';
@@ -142,8 +144,9 @@ export default function DebriefPage() {
     );
   }
 
-  const grade = getGradeFromScore(callResult.goat_score);
-  const gradeColor = getGradeColor(callResult.goat_score);
+  const callData = callResult as any;
+  const grade = getGradeFromScore(callData?.goat_score || 0);
+  const gradeColor = getGradeColor(callData?.goat_score || 0);
 
   return (
     <div className="min-h-screen bg-[#0B0E14] text-white p-6 flex flex-col max-w-md mx-auto">
@@ -163,7 +166,7 @@ export default function DebriefPage() {
         <div className={`text-8xl font-bold mb-2 ${gradeColor}`}>
           {grade}
         </div>
-        <div className="text-2xl text-gray-400">{callResult.goat_score}/100</div>
+        <div className="text-2xl text-gray-400">{callData.goat_score}/100</div>
       </div>
 
       {/* Logic Gate Checklist */}
@@ -173,7 +176,7 @@ export default function DebriefPage() {
       >
         <h2 className="text-xl font-semibold mb-4">Logic Gates</h2>
         <div className="space-y-3">
-          {callResult.logic_gates.map((gate, index) => (
+          {((callData.logic_gates as any[]) || []).map((gate: any, index: number) => (
             <div
               key={index}
               className="flex items-center justify-between p-3 rounded-lg bg-white/5"
@@ -199,7 +202,7 @@ export default function DebriefPage() {
       </div>
 
       {/* Rebuttal of the Day */}
-      {callResult.rebuttal_of_the_day && callResult.rebuttal_of_the_day !== 'None' && (
+      {callData.rebuttal_of_the_day && callData.rebuttal_of_the_day !== 'None' && (
         <div 
           className="rounded-2xl p-6 border border-[#22C55E]/30 mb-6"
           style={{ 
@@ -208,7 +211,7 @@ export default function DebriefPage() {
           }}
         >
           <div className="text-sm text-[#22C55E] mb-2 font-semibold">🔥 Rebuttal of the Day</div>
-          <div className="text-base italic">"{callResult.rebuttal_of_the_day}"</div>
+          <div className="text-base italic">"{callData.rebuttal_of_the_day}"</div>
         </div>
       )}
 

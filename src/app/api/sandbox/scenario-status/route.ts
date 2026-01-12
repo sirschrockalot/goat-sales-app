@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/getUserFromRequest';
-import { supabaseAdmin } from '@/lib/supabase';
+
 import logger from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
@@ -16,6 +16,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get supabaseAdmin
+    const { supabaseAdmin } = await import('@/lib/supabase');
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Database not available' }, { status: 500 });
+    }
+
     // Verify user is admin
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
@@ -23,7 +29,7 @@ export async function GET(request: NextRequest) {
       .eq('id', user.id)
       .single();
 
-    if (profileError || !profile?.is_admin) {
+    if (profileError || !(profile as any)?.is_admin) {
       return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
     }
 
@@ -44,7 +50,8 @@ export async function GET(request: NextRequest) {
       .eq('id', scenarioId)
       .single();
 
-    if (scenarioError || !scenario) {
+    const scenarioData = scenario as any;
+    if (scenarioError || !scenarioData) {
       return NextResponse.json(
         { error: 'Scenario not found' },
         { status: 404 }
@@ -71,16 +78,16 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       scenario: {
-        id: scenario.id,
-        rawObjection: scenario.raw_objection,
-        status: scenario.status,
-        totalSessions: scenario.total_sessions,
-        completedSessions: scenario.completed_sessions,
-        top3Identified: scenario.top_3_identified,
-        createdAt: scenario.created_at,
-        completedAt: scenario.completed_at,
-        progress: scenario.total_sessions > 0
-          ? Math.round((scenario.completed_sessions / scenario.total_sessions) * 100)
+        id: scenarioData.id,
+        rawObjection: scenarioData.raw_objection,
+        status: scenarioData.status,
+        totalSessions: scenarioData.total_sessions,
+        completedSessions: scenarioData.completed_sessions,
+        top3Identified: scenarioData.top_3_identified,
+        createdAt: scenarioData.created_at,
+        completedAt: scenarioData.completed_at,
+        progress: scenarioData.total_sessions > 0
+          ? Math.round((scenarioData.completed_sessions / scenarioData.total_sessions) * 100)
           : 0,
       },
       breakthroughs: (breakthroughs || []).map((b: any) => ({

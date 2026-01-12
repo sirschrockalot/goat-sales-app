@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+
 import logger from '@/lib/logger';
 
 interface VoiceHintRequest {
@@ -13,9 +13,12 @@ interface VoiceHintRequest {
 }
 
 export async function POST(request: NextRequest) {
+  let callId: string | undefined;
+  let message: string | undefined;
   try {
     const body: VoiceHintRequest = await request.json();
-    const { callId, message } = body;
+    callId = body.callId;
+    message = body.message;
 
     if (!callId || !message) {
       return NextResponse.json(
@@ -64,22 +67,30 @@ export async function POST(request: NextRequest) {
 
     // Optionally log the hint in the database
     try {
-      await supabaseAdmin
+      // Get supabaseAdmin
+      const { supabaseAdmin } = await import('@/lib/supabase');
+      if (!supabaseAdmin) {
+        // If database not available, still return success for the voice hint
+        return NextResponse.json({ success: true, message: 'Voice hint sent' });
+      }
+
+      const { data: existingCall } = await supabaseAdmin
+        .from('calls')
+        .select('metadata')
+        .eq('id', callId)
+        .single();
+
+      await (supabaseAdmin as any)
         .from('calls')
         .update({
           metadata: {
-            ...(await supabaseAdmin
-              .from('calls')
-              .select('metadata')
-              .eq('id', callId)
-              .single()
-              .then(({ data }) => data?.metadata || {})),
+            ...((existingCall as any)?.metadata || {}),
             lastVoiceHint: {
               message,
               timestamp: new Date().toISOString(),
             },
           },
-        })
+        } as any)
         .eq('id', callId);
     } catch (dbError) {
       // Non-critical - log but don't fail
@@ -94,7 +105,7 @@ export async function POST(request: NextRequest) {
       result,
     });
   } catch (error) {
-    logger.error('Error sending voice hint', { error, callId });
+    logger.error('Error sending voice hint', { error });
     return NextResponse.json(
       {
         error: 'Internal server error',

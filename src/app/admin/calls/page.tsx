@@ -5,6 +5,8 @@
  * Shows filtered call history for a specific user
  */
 
+export const dynamic = 'force-dynamic';
+
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
@@ -24,7 +26,7 @@ export default function AdminCallsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isAdmin, loading: authLoading } = useAuth();
-  const userId = searchParams.get('userId');
+  const userId = searchParams?.get('userId') || null;
   const [calls, setCalls] = useState<Call[]>([]);
   const [userName, setUserName] = useState<string>('');
   const [loading, setLoading] = useState(true);

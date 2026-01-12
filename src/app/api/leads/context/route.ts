@@ -4,13 +4,14 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+
 import logger from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
+  let phoneNumber: string | null = null;
   try {
     const { searchParams } = new URL(request.url);
-    const phoneNumber = searchParams.get('phone');
+    phoneNumber = searchParams.get('phone');
 
     if (!phoneNumber) {
       return NextResponse.json(
@@ -21,6 +22,12 @@ export async function GET(request: NextRequest) {
 
     // Normalize phone number (remove formatting)
     const normalizedPhone = phoneNumber.replace(/\D/g, '');
+
+    // Get supabaseAdmin
+    const { supabaseAdmin } = await import('@/lib/supabase');
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Database not available' }, { status: 500 });
+    }
 
     // Search for calls with this phone number
     // Note: This assumes phone numbers are stored in calls table or a separate leads table
@@ -37,12 +44,13 @@ export async function GET(request: NextRequest) {
     let previousCalls = 0;
     let lastScore = null;
 
-    if (calls && calls.length > 0) {
-      previousCalls = calls.length;
-      lastScore = calls[0].goat_score;
+    const callsData = (calls as any[]) || [];
+    if (callsData.length > 0) {
+      previousCalls = callsData.length;
+      lastScore = callsData[0].goat_score;
 
       // Try to extract "The Why" from logic gates or transcript
-      const latestCall = calls[0];
+      const latestCall = callsData[0];
       if (latestCall.logic_gates) {
         const whyGate = (latestCall.logic_gates as Array<any>).find(
           (gate) => gate.name?.includes('Why') || gate.name?.includes('Fact-Finding')

@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin, createSupabaseClient } from '@/lib/supabase';
+import { createSupabaseClient } from '@/lib/supabase';
 import logger from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
@@ -32,6 +32,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Get supabaseAdmin
+    const { supabaseAdmin } = await import('@/lib/supabase');
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Database not available' }, { status: 500 });
+    }
+
     // Get the call to verify score and ownership
     const { data: call, error: callError } = await supabaseAdmin
       .from('calls')
@@ -46,15 +52,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const callData = call as any;
+
     // Verify the call belongs to the authenticated user
-    if (call.user_id !== userId) {
+    if (callData.user_id !== userId) {
       return NextResponse.json(
         { error: 'Forbidden - Call does not belong to you' },
         { status: 403 }
       );
     }
 
-    if (call.goat_score <= 85) {
+    if (callData.goat_score <= 85) {
       return NextResponse.json(
         { error: 'Score must be above 85 to share rebuttal' },
         { status: 403 }
@@ -62,15 +70,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Insert into rebuttals table
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await (supabaseAdmin as any)
       .from('rebuttals')
       .insert({
         rebuttal_text: rebuttalText,
-        context: `From ${call.persona_mode} mode call`,
+        context: `From ${callData.persona_mode} mode call`,
         source: 'user_shared',
         user_id: userId,
         call_id: callId,
-      })
+      } as any)
       .select()
       .single();
 
@@ -84,7 +92,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      id: data.id,
+      id: (data as any).id,
       message: 'Rebuttal shared to community library',
     });
   } catch (error) {

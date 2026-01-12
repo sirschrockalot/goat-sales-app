@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+
 import { getUserFromRequest } from '@/lib/getUserFromRequest';
 import logger from '@/lib/logger';
 
@@ -20,13 +20,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Get supabaseAdmin
+    const { supabaseAdmin } = await import('@/lib/supabase');
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Database not available' }, { status: 500 });
+    }
+
     // Update profile to mark onboarding as completed
-    const { error: updateError } = await supabaseAdmin
+    const { error: updateError } = await (supabaseAdmin as any)
       .from('profiles')
       .update({
         onboarding_completed: true,
         updated_at: new Date().toISOString(),
-      })
+      } as any)
       .eq('id', user.id);
 
     if (updateError) {

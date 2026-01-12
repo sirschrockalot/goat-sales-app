@@ -5,6 +5,8 @@
  * Admin-only page for monitoring autonomous self-play sessions
  */
 
+export const dynamic = 'force-dynamic';
+
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import TrainingMonitor from '@/components/TrainingMonitor';

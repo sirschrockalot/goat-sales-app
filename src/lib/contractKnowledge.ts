@@ -11,6 +11,11 @@ export interface ContractClause {
   plainEnglish: string;
   confirmationQuestion?: string;
   keyPoints: string[];
+  objectionTrigger?: boolean;
+  objectionText?: string;
+  skepticismLevels?: any;
+  correctResponse?: string;
+  objectionTip?: string;
 }
 
 export interface ContractDetails {

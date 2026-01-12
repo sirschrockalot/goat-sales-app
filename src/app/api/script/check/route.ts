@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+
 import OpenAI from 'openai';
 import logger from '@/lib/logger';
 
@@ -108,15 +108,21 @@ export async function POST(request: NextRequest) {
       });
     };
 
+    // Get supabaseAdmin
+    const { supabaseAdmin } = await import('@/lib/supabase');
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Database not available' }, { status: 500 });
+    }
+
     // Call the appropriate RPC function in Supabase
     let data: any;
     let error: any;
     try {
-      const result = await supabaseAdmin.rpc(rpcFunction, {
+      const result = await (supabaseAdmin as any).rpc(rpcFunction, {
         query_embedding: queryEmbedding,
         match_threshold: 0.3, // Lower threshold to get all gates
         match_count: 8, // Get all 8 gates
-      });
+      } as any);
       data = result.data;
       error = result.error;
     } catch (rpcError) {

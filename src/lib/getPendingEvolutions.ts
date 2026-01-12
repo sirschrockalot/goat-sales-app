@@ -3,7 +3,6 @@
  * Fetches prompt versions that are pending admin review
  */
 
-import { supabaseAdmin } from './supabase';
 import logger from './logger';
 
 export interface PendingEvolution {
@@ -38,6 +37,12 @@ export interface PendingEvolution {
  * Get pending evolutions (status = 'pending_review')
  */
 export async function getPendingEvolutions(): Promise<PendingEvolution[]> {
+  const { supabaseAdmin } = await import('./supabase');
+  if (!supabaseAdmin) {
+    logger.error('Supabase admin client not available');
+    throw new Error('Database not available');
+  }
+
   const { data, error } = await supabaseAdmin
     .from('prompt_versions')
     .select('*')
@@ -51,7 +56,7 @@ export async function getPendingEvolutions(): Promise<PendingEvolution[]> {
 
   // Enrich with additional data
   const enriched = await Promise.all(
-    (data || []).map(async (evolution) => {
+    ((data as any[]) || []).map(async (evolution: any) => {
       // Get current active prompt for comparison
       const { data: currentVersion } = await supabaseAdmin
         .from('prompt_versions')
@@ -90,18 +95,19 @@ export async function getPendingEvolutions(): Promise<PendingEvolution[]> {
             .select('goat_score, metadata')
             .in('id', callIds);
 
-          if (calls && calls.length > 0) {
-            impactMetrics.call_count = calls.length;
+          const callsData = (calls as any[]) || [];
+          if (callsData.length > 0) {
+            impactMetrics.call_count = callsData.length;
             impactMetrics.avg_goat_score = Math.round(
-              calls.reduce((sum, c) => sum + (c.goat_score || 0), 0) / calls.length
+              callsData.reduce((sum: number, c: any) => sum + (c.goat_score || 0), 0) / callsData.length
             );
-            const humanityScores = calls
-              .map(c => (c.metadata as any)?.humanity_score)
+            const humanityScores = callsData
+              .map((c: any) => (c.metadata as any)?.humanity_score)
               .filter((score): score is number => typeof score === 'number' && score > 0);
             
             if (humanityScores.length > 0) {
               impactMetrics.avg_humanity_score = Math.round(
-                humanityScores.reduce((sum, score) => sum + score, 0) / humanityScores.length
+                humanityScores.reduce((sum: number, score: number) => sum + score, 0) / humanityScores.length
               );
             }
           }
@@ -110,7 +116,7 @@ export async function getPendingEvolutions(): Promise<PendingEvolution[]> {
 
       return {
         ...evolution,
-        current_prompt: currentVersion?.prompt_text || '',
+        current_prompt: (currentVersion as any)?.prompt_text || '',
         story_details: storyDetails,
         impact_metrics: impactMetrics,
       } as PendingEvolution;
@@ -124,6 +130,12 @@ export async function getPendingEvolutions(): Promise<PendingEvolution[]> {
  * Get version history for an assistant
  */
 export async function getVersionHistory(assistantId: string): Promise<PendingEvolution[]> {
+  const { supabaseAdmin } = await import('./supabase');
+  if (!supabaseAdmin) {
+    logger.error('Supabase admin client not available');
+    throw new Error('Database not available');
+  }
+
   const { data, error } = await supabaseAdmin
     .from('prompt_versions')
     .select('*')
@@ -135,5 +147,5 @@ export async function getVersionHistory(assistantId: string): Promise<PendingEvo
     throw error;
   }
 
-  return (data || []) as PendingEvolution[];
+  return ((data as any[]) || []) as PendingEvolution[];
 }

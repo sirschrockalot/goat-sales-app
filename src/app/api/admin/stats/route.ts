@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+
 import { getUserFromRequest } from '@/lib/getUserFromRequest';
 import logger from '@/lib/logger';
 
@@ -17,13 +17,17 @@ export async function GET(request: NextRequest) {
     }
 
     // Verify user is admin
+    const { supabaseAdmin } = await import('@/lib/supabase');
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Database not available' }, { status: 500 });
+    }
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
       .select('is_admin')
       .eq('id', user.id)
       .single();
 
-    if (profileError || !profile?.is_admin) {
+    if (profileError || !profile || !(profile as any).is_admin) {
       return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
     }
 
@@ -44,7 +48,7 @@ export async function GET(request: NextRequest) {
       .not('goat_score', 'is', null);
 
     const averageScore = allCalls && allCalls.length > 0
-      ? Math.round(allCalls.reduce((sum, call) => sum + (call.goat_score || 0), 0) / allCalls.length)
+      ? Math.round((allCalls as any[]).reduce((sum: number, call: any) => sum + (call.goat_score || 0), 0) / allCalls.length)
       : 0;
 
     // Top Objection (from last 7 days)
@@ -57,7 +61,7 @@ export async function GET(request: NextRequest) {
 
     // Extract objections from transcripts (simplified - you may want to use AI to categorize)
     const objectionCounts: Record<string, number> = {};
-    recentCalls?.forEach((call) => {
+    (recentCalls as any[])?.forEach((call: any) => {
       const transcript = call.transcript?.toLowerCase() || '';
       if (transcript.includes('price') || transcript.includes('too low') || transcript.includes('offer')) {
         objectionCounts['Price Too Low'] = (objectionCounts['Price Too Low'] || 0) + 1;
@@ -79,7 +83,7 @@ export async function GET(request: NextRequest) {
       .select('logic_gates')
       .not('logic_gates', 'is', null);
 
-    const totalClinches = allCallsForClinches?.filter((call) => {
+    const totalClinches = (allCallsForClinches as any[])?.filter((call: any) => {
       const gates = call.logic_gates as Array<{ name: string; passed: boolean }>;
       return gates?.some((gate) => 
         gate.name === 'The Clinch' || gate.name.includes('Clinch')

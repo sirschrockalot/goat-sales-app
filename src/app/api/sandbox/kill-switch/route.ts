@@ -6,11 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/getUserFromRequest';
 import logger from '@/lib/logger';
-
-// In-memory flag to track kill-switch state
-// In production, you might want to use Redis or a database
-let killSwitchActive = false;
-let killSwitchActivatedAt: Date | null = null;
+import { getKillSwitchStatus, setKillSwitchActive } from '@/lib/killSwitchUtils';
 
 export async function GET(request: NextRequest) {
   try {
@@ -22,19 +18,23 @@ export async function GET(request: NextRequest) {
 
     // Verify user is admin
     const { supabaseAdmin } = await import('@/lib/supabase');
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Database not available' }, { status: 500 });
+    }
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
       .select('is_admin')
       .eq('id', user.id)
       .single();
 
-    if (profileError || !profile?.is_admin) {
+    if (profileError || !(profile as any)?.is_admin) {
       return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
     }
 
+    const status = getKillSwitchStatus();
     return NextResponse.json({
-      active: killSwitchActive,
-      activatedAt: killSwitchActivatedAt,
+      active: status.active,
+      activatedAt: status.activatedAt,
     });
   } catch (error) {
     logger.error('Error checking kill-switch status', { error });
@@ -55,13 +55,16 @@ export async function POST(request: NextRequest) {
 
     // Verify user is admin
     const { supabaseAdmin } = await import('@/lib/supabase');
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Database not available' }, { status: 500 });
+    }
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
       .select('is_admin')
       .eq('id', user.id)
       .single();
 
-    if (profileError || !profile?.is_admin) {
+    if (profileError || !(profile as any)?.is_admin) {
       return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
     }
 
@@ -69,15 +72,15 @@ export async function POST(request: NextRequest) {
     const { action } = body; // 'activate' or 'deactivate'
 
     if (action === 'activate') {
-      killSwitchActive = true;
-      killSwitchActivatedAt = new Date();
+      setKillSwitchActive(true);
+      const status = getKillSwitchStatus();
 
       // Send Slack alert if configured
       const slackWebhook = process.env.SLACK_WEBHOOK_URL;
       if (slackWebhook) {
         const message = `🚨 KILL-SWITCH ACTIVATED\n\n` +
           `Activated by: ${user.email}\n` +
-          `Time: ${killSwitchActivatedAt.toISOString()}\n` +
+          `Time: ${status.activatedAt?.toISOString()}\n` +
           `All autonomous battle loops will be stopped.`;
 
         fetch(slackWebhook, {
@@ -91,8 +94,7 @@ export async function POST(request: NextRequest) {
 
       logger.warn('Kill-switch activated', { userId: user.id, email: user.email });
     } else if (action === 'deactivate') {
-      killSwitchActive = false;
-      killSwitchActivatedAt = null;
+      setKillSwitchActive(false);
       logger.info('Kill-switch deactivated', { userId: user.id });
     } else {
       return NextResponse.json(
@@ -101,11 +103,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const status = getKillSwitchStatus();
     return NextResponse.json({
       success: true,
-      active: killSwitchActive,
-      activatedAt: killSwitchActivatedAt,
-      message: killSwitchActive
+      active: status.active,
+      activatedAt: status.activatedAt,
+      message: status.active
         ? 'Kill-switch activated. All autonomous loops will stop.'
         : 'Kill-switch deactivated. Autonomous loops can resume.',
     });
@@ -118,7 +121,6 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Export function to check kill-switch status (for use in autonomousBattle.ts)
-export function isKillSwitchActive(): boolean {
-  return killSwitchActive;
-}
+// Note: isKillSwitchActive function moved to a separate utility file
+// to avoid Next.js route export restrictions
+// Import it from @/lib/killSwitchUtils if needed

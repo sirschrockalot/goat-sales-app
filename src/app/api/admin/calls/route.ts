@@ -4,7 +4,6 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
 import logger from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
@@ -17,6 +16,12 @@ export async function GET(request: NextRequest) {
         { error: 'userId is required' },
         { status: 400 }
       );
+    }
+
+    // Get supabaseAdmin
+    const { supabaseAdmin } = await import('@/lib/supabase');
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Database not available' }, { status: 500 });
     }
 
     // Get user profile
@@ -36,9 +41,10 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       calls: calls || [],
-      userName: profile?.name || profile?.email || 'Unknown User',
+      userName: (profile as any)?.name || (profile as any)?.email || 'Unknown User',
     });
   } catch (error) {
+    const userId = new URL(request.url).searchParams.get('userId');
     logger.error('Error fetching admin calls', { error, userId });
     return NextResponse.json(
       { error: 'Internal server error' },

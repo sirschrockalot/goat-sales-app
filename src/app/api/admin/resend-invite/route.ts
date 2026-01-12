@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin, createSupabaseClient } from '@/lib/supabase';
+import { createSupabaseClient } from '@/lib/supabase';
 import logger from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
@@ -21,6 +21,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const { supabaseAdmin } = await import('@/lib/supabase');
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Database not available' }, { status: 500 });
+    }
     // SECURITY: Strictly check if user is admin
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
@@ -28,7 +32,7 @@ export async function POST(request: NextRequest) {
       .eq('id', user.id)
       .single();
 
-    if (profileError || !profile || !profile.is_admin) {
+    if (profileError || !profile || !(profile as any).is_admin) {
       logger.warn('Non-admin user attempted to resend invite', { userId: user.id });
       return NextResponse.json(
         { error: 'Forbidden - Admin access required' },
@@ -48,9 +52,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user exists and is pending
-    const { data: existingUser, error: getUserError } = await supabaseAdmin.auth.admin.getUserByEmail(email);
+    const { data: usersList } = await supabaseAdmin.auth.admin.listUsers();
+    const existingUser = usersList?.users?.find((u: any) => u.email === email);
 
-    if (getUserError || !existingUser?.user) {
+    if (!existingUser) {
       return NextResponse.json(
         { error: 'User not found' },
         { status: 404 }
@@ -58,7 +63,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user has already confirmed email
-    if (existingUser.user.email_confirmed_at) {
+    if ((existingUser as any).email_confirmed_at) {
       return NextResponse.json(
         { error: 'User has already confirmed their email' },
         { status: 400 }
@@ -66,7 +71,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Preserve existing training_path from user metadata if it exists
-    const existingTrainingPath = existingUser.user.user_metadata?.training_path || null;
+    const existingTrainingPath = (existingUser as any).user_metadata?.training_path || null;
 
     // Resend invitation via Supabase Admin SDK
     const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(

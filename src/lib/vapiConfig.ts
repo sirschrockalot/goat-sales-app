@@ -3,7 +3,14 @@
  * Handles dynamic configuration for human-like speech patterns
  */
 
-import logger from './logger';
+// Logger - conditional to avoid winston in client bundles
+const logger = typeof window === 'undefined' 
+  ? require('./logger').default 
+  : {
+      error: (msg: string, meta?: any) => console.error(`[ERROR] ${msg}`, meta),
+      info: (msg: string, meta?: any) => console.log(`[INFO] ${msg}`, meta),
+      warn: (msg: string, meta?: any) => console.warn(`[WARN] ${msg}`, meta),
+    };
 
 /**
  * Calculate dynamic endOfTurnDetectionTimeout based on sentiment
@@ -179,10 +186,13 @@ export function getElevenLabsCloserConfig(): {
   // If this doesn't work, set ELEVEN_LABS_BRIAN_VOICE_ID in .env to match your account
   const voiceId = customVoiceId || 'nPczCjzI2devNBz1zQrb'; // Brian - Deep, Resonant and Comforting
   
+  // Ensure eleven_turbo_v2_5 is used (can be overridden via env)
+  const model = process.env.ELEVEN_LABS_MODEL || 'eleven_turbo_v2_5';
+  
   return {
     provider: '11labs',
     voiceId: voiceId,
-    model: 'eleven_turbo_v2_5', // Best for low-latency realism
+    model: model, // eleven_turbo_v2_5 for production
     stability: 0.4, // Human inflection (lower = more variation)
     similarityBoost: 0.8, // Consistent authority (higher = more consistent)
   };
@@ -201,9 +211,13 @@ export function getDeepgramSTTConfig(): {
   diarize?: boolean;
   smart_format?: boolean;
 } {
+  // Use nova-2-general for production (better accuracy and language support)
+  // Can be overridden via environment variable
+  const model = process.env.DEEPGRAM_MODEL || 'nova-2-general';
+  
   return {
     provider: 'deepgram',
-    model: 'nova-2', // Fast, accurate transcription
+    model: model, // nova-2-general for production, can fallback to nova-2
     endpointing: 500, // Increased from 250ms to 500ms - gives more time for speech to complete before endpointing
     language: 'en-US', // Explicitly set language for better accuracy
     punctuate: true, // Add punctuation for better transcription accuracy
@@ -231,10 +245,13 @@ export function getElevenLabsSellerConfig(): {
   const customVoiceId = process.env.ELEVEN_LABS_SELLER_VOICE_ID;
   const voiceId = customVoiceId || '2vbhUP8zyKg4dEZaTWGn'; // Stella - configured in Vapi UI from ElevenLabs
   
+  // Ensure eleven_turbo_v2_5 is used (can be overridden via env)
+  const model = process.env.ELEVEN_LABS_MODEL || 'eleven_turbo_v2_5';
+  
   return {
     provider: '11labs',
     voiceId: voiceId,
-    model: 'eleven_turbo_v2_5', // Low-latency for testing rep's speed
+    model: model, // eleven_turbo_v2_5 for production
     stability: 0.5, // Balanced variation
     similarityBoost: 0.7, // Good consistency
   };
@@ -810,7 +827,8 @@ export async function generateDynamicFirstMessage(
           .eq('id', userId)
           .single();
 
-        const name = profile?.name || 'there';
+        const profileData = profile as any;
+        const name = profileData?.name || 'there';
         return `Hi, ${name}, this is [YOUR NAME] with Presidential Digs Real Estate. How are you doing today?`;
       }
     } catch (error) {

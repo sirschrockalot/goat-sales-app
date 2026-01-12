@@ -4,7 +4,6 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { generateDailyAudit, sendSlackSummary } from '../../../../scripts/dailyAuditor';
 import logger from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
@@ -29,6 +28,10 @@ export async function GET(request: NextRequest) {
     }
 
     logger.info('Daily audit cron job triggered');
+
+    // Dynamically import dailyAuditor from root scripts (server-side only)
+    const dailyAuditorModule = await (Function('return import("../../../scripts/dailyAuditor.js")')()) as any;
+    const { generateDailyAudit, sendSlackSummary } = dailyAuditorModule;
 
     // Generate audit summary
     const summary = await generateDailyAudit();

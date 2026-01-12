@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+
 import logger from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
@@ -19,14 +19,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Get supabaseAdmin
+    const { supabaseAdmin } = await import('@/lib/supabase');
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Database not available' }, { status: 500 });
+    }
+
     // Call the match_rebuttals function in Supabase
     // This function performs similarity search on the rebuttals table
     // Adjust parameters based on your actual function signature
-    const { data, error } = await supabaseAdmin.rpc('match_rebuttals', {
+    const { data, error } = await (supabaseAdmin as any).rpc('match_rebuttals', {
       query_text: query, // Text query for similarity search
       match_threshold: 0.7, // Similarity threshold (0-1)
       match_count: limit, // Number of results to return
-    });
+    } as any);
 
     if (error) {
       logger.error('Error calling match_rebuttals', { error, query });

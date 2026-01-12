@@ -42,9 +42,10 @@ export async function analyzeVoicePerformance(
     }
 
     // Calculate new aggregated metrics
-    const currentSampleSize = existingLog?.sample_size || 0;
-    const currentAvgHumanity = existingLog?.avg_humanity_score || 0;
-    const currentConversions = existingLog?.conversion_rate ? (existingLog.conversion_rate * currentSampleSize / 100) : 0;
+    const existingLogData = existingLog as any;
+    const currentSampleSize = existingLogData?.sample_size || 0;
+    const currentAvgHumanity = existingLogData?.avg_humanity_score || 0;
+    const currentConversions = existingLogData?.conversion_rate ? (existingLogData.conversion_rate * currentSampleSize / 100) : 0;
 
     const newSampleSize = currentSampleSize + 1;
     const newAvgHumanity = humanityScore !== null
@@ -56,15 +57,15 @@ export async function analyzeVoicePerformance(
     // Update or insert performance log
     if (existingLog) {
       // Update existing log
-      const { error: updateError } = await supabaseAdmin
+      const { error: updateError } = await (supabaseAdmin as any)
         .from('voice_performance_logs')
         .update({
           avg_humanity_score: newAvgHumanity,
           conversion_rate: newConversionRate,
           sample_size: newSampleSize,
-          high_performing: isHighPerforming || existingLog.high_performing, // Keep flag if already set
+          high_performing: isHighPerforming || existingLogData?.high_performing, // Keep flag if already set
           updated_at: new Date().toISOString(),
-        })
+        } as any)
         .eq('stability_setting', stabilityValue);
 
       if (updateError) {
@@ -72,7 +73,7 @@ export async function analyzeVoicePerformance(
       }
     } else {
       // Insert new log
-      const { error: insertError } = await supabaseAdmin
+      const { error: insertError } = await (supabaseAdmin as any)
         .from('voice_performance_logs')
         .insert({
           stability_setting: stabilityValue,
@@ -80,7 +81,7 @@ export async function analyzeVoicePerformance(
           conversion_rate: contractSigned === true ? 100 : 0,
           sample_size: 1,
           high_performing: isHighPerforming,
-        });
+        } as any);
 
       if (insertError) {
         logger.error('Error inserting voice performance log', { error: insertError });
@@ -122,7 +123,8 @@ export async function getOptimalStability(sampleSize: number = 100): Promise<num
 
     // Return the stability with the highest combined score
     // Weight: 60% conversion rate, 40% humanity score
-    const scoredLogs = logs.map(log => ({
+    const logsData = (logs as any[]) || [];
+    const scoredLogs = logsData.map((log: any) => ({
       stability: log.stability_setting,
       score: (log.conversion_rate || 0) * 0.6 + (log.avg_humanity_score || 0) * 0.4,
     }));

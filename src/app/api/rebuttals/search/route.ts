@@ -5,12 +5,13 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+
 import OpenAI from 'openai';
+
 import logger from '@/lib/logger';
 
-// Use Edge Runtime for lowest latency
-export const runtime = 'edge';
+// Note: Removed Edge Runtime due to winston/logger dependency
+// Using Node.js runtime for full compatibility
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -48,12 +49,18 @@ export async function POST(request: NextRequest) {
 
     const queryEmbedding = embeddingResponse.data[0].embedding;
 
+    // Get supabaseAdmin
+    const { supabaseAdmin } = await import('@/lib/supabase');
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Database not available' }, { status: 500 });
+    }
+
     // Call the match_rebuttals RPC function in Supabase
-    const { data, error } = await supabaseAdmin.rpc('match_rebuttals', {
+    const { data, error } = await (supabaseAdmin as any).rpc('match_rebuttals', {
       query_embedding: queryEmbedding,
       match_threshold: 0.5, // Lower threshold to get more results
       match_count: limit,
-    });
+    } as any);
 
     if (error) {
       logger.error('Error calling match_rebuttals', { error, query });
@@ -73,7 +80,7 @@ export async function POST(request: NextRequest) {
       }
 
       return NextResponse.json({
-        results: (fallbackData || []).map((r) => ({
+        results: ((fallbackData as any[]) || []).map((r: any) => ({
           id: r.id,
           rebuttal_text: r.rebuttal_text,
           context: r.context || null,

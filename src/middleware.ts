@@ -6,7 +6,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import logger from './lib/logger';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -47,7 +46,7 @@ export async function middleware(request: NextRequest) {
   if (pathname.startsWith('/admin') || pathname.startsWith('/api/admin')) {
     try {
       if (!supabaseUrl || !supabaseAnonKey) {
-        logger.error('Supabase environment variables not configured');
+        console.error('Supabase environment variables not configured');
         if (pathname.startsWith('/api/')) {
           return NextResponse.json(
             { error: 'Server configuration error' },
@@ -57,10 +56,35 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(new URL('/login', request.url));
       }
 
-      // Get auth token from cookies
-      const accessToken = request.cookies.get('sb-access-token')?.value ||
-                         request.cookies.get('supabase-auth-token')?.value ||
-                         request.headers.get('authorization')?.replace('Bearer ', '');
+      // Extract project ref from URL to build cookie name
+      const url = new URL(supabaseUrl);
+      const projectRef = url.hostname.split('.')[0] || 'localhost';
+      const cookieName = `sb-${projectRef}-auth-token`;
+      const cookieNameAlt = `sb-127.0.0.1-auth-token`;
+      
+      // Get auth token from cookies (Supabase uses sb-<project-ref>-auth-token pattern)
+      let accessToken: string | undefined;
+      const cookieValue = request.cookies.get(cookieName)?.value || 
+                         request.cookies.get(cookieNameAlt)?.value ||
+                         request.cookies.get('sb-access-token')?.value ||
+                         request.cookies.get('supabase-auth-token')?.value;
+      
+      if (cookieValue) {
+        try {
+          // Cookie value is JSON encoded session data
+          const sessionData = JSON.parse(decodeURIComponent(cookieValue));
+          accessToken = sessionData.access_token || sessionData.accessToken;
+        } catch {
+          // If not JSON, might be the token directly
+          accessToken = cookieValue;
+        }
+      }
+      
+      // Also check Authorization header
+      const authHeader = request.headers.get('authorization');
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        accessToken = authHeader.replace('Bearer ', '');
+      }
 
       if (!accessToken) {
         // Redirect to login for admin routes, return 401 for API routes
@@ -101,7 +125,8 @@ export async function middleware(request: NextRequest) {
         .eq('id', user.id)
         .single();
 
-      if (profileError || !profile || !profile.is_admin) {
+      const profileData = profile as any;
+      if (profileError || !profileData || !profileData.is_admin) {
         if (pathname.startsWith('/api/')) {
           return NextResponse.json(
             { error: 'Forbidden - Admin access required' },
@@ -114,7 +139,7 @@ export async function middleware(request: NextRequest) {
       // User is authenticated and is admin - allow access
       return NextResponse.next();
     } catch (error) {
-      logger.error('Middleware auth error', { error, pathname });
+      console.error('Middleware auth error', { error, pathname });
       if (pathname.startsWith('/api/')) {
         return NextResponse.json(
           { error: 'Internal server error' },
@@ -129,13 +154,37 @@ export async function middleware(request: NextRequest) {
   if (pathname.startsWith('/gauntlet')) {
     try {
       if (!supabaseUrl || !supabaseAnonKey) {
-        logger.error('Supabase environment variables not configured');
+        console.error('Supabase environment variables not configured');
         return NextResponse.redirect(new URL('/login', request.url));
       }
 
-      const accessToken = request.cookies.get('sb-access-token')?.value ||
-                         request.cookies.get('supabase-auth-token')?.value ||
-                         request.headers.get('authorization')?.replace('Bearer ', '');
+      // Extract project ref from URL to build cookie name
+      const url = new URL(supabaseUrl);
+      const projectRef = url.hostname.split('.')[0] || 'localhost';
+      const cookieName = `sb-${projectRef}-auth-token`;
+      const cookieNameAlt = `sb-127.0.0.1-auth-token`;
+      
+      // Get auth token from cookies
+      let accessToken: string | undefined;
+      const cookieValue = request.cookies.get(cookieName)?.value || 
+                         request.cookies.get(cookieNameAlt)?.value ||
+                         request.cookies.get('sb-access-token')?.value ||
+                         request.cookies.get('supabase-auth-token')?.value;
+      
+      if (cookieValue) {
+        try {
+          const sessionData = JSON.parse(decodeURIComponent(cookieValue));
+          accessToken = sessionData.access_token || sessionData.accessToken;
+        } catch {
+          accessToken = cookieValue;
+        }
+      }
+      
+      // Also check Authorization header
+      const authHeader = request.headers.get('authorization');
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        accessToken = authHeader.replace('Bearer ', '');
+      }
 
       if (!accessToken) {
         return NextResponse.redirect(new URL('/login', request.url));
@@ -159,7 +208,7 @@ export async function middleware(request: NextRequest) {
       // User is authenticated - allow access to gauntlet
       return NextResponse.next();
     } catch (error) {
-      logger.error('Middleware auth error for gauntlet', { error });
+      console.error('Middleware auth error for gauntlet', { error });
       return NextResponse.redirect(new URL('/login', request.url));
     }
   }

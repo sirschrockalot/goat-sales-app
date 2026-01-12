@@ -348,6 +348,7 @@ export async function POST(request: NextRequest) {
           });
         })(),
         // Configure Deepgram STT for fast transcription with improved sensitivity
+        // Uses nova-2-general model for production (better accuracy)
         // Add OpenAI as fallback for reliability
         // Note: Vapi API maximum endpointing is 500ms, so we use that for both modes
         // The prompt instructions ensure Learning Mode pauses and waits for responses
@@ -357,7 +358,7 @@ export async function POST(request: NextRequest) {
           // The system prompt instructions handle pausing behavior in Learning Mode
           return {
             provider: deepgramConfig.provider,
-            model: deepgramConfig.model,
+            model: deepgramConfig.model, // nova-2-general for production
             endpointing: deepgramConfig.endpointing, // 500ms (Vapi maximum) - gives time for speech completion
             language: deepgramConfig.language, // en-US for better accuracy
             // Note: punctuate and smart_format are not supported in Vapi API

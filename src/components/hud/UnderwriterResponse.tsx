@@ -55,7 +55,9 @@ export default function UnderwriterResponse({
 
   const generateUnderwriterDecision = () => {
     // Get gauntlet level config for suggested price
-    const levelConfig = gauntletLevel ? getGauntletLevel(gauntletLevel) : null;
+    const levelConfig = gauntletLevel && gauntletLevel >= 1 && gauntletLevel <= 5 
+      ? getGauntletLevel(gauntletLevel as 1 | 2 | 3 | 4 | 5) 
+      : null;
     const suggestedPrice = levelConfig?.suggestedBuyPrice || 180000;
 
     // Calculate max approved price (typically 5-10% below suggested for negotiation room)

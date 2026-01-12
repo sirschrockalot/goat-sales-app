@@ -197,7 +197,7 @@ async function runAdversarialBattle(): Promise<AdversarialBattle> {
           'Expose lack of humanity',
         ],
         is_active: true,
-      })
+      } as any)
       .select()
       .single();
 
@@ -205,9 +205,9 @@ async function runAdversarialBattle(): Promise<AdversarialBattle> {
       throw new Error(`Failed to create predatory seller persona: ${createError?.message}`);
     }
 
-    personaId = newPersona.id;
+    personaId = (newPersona as any).id;
   } else {
-    personaId = persona.id;
+    personaId = (persona as any).id;
   }
 
   // Run battle with higher temperature for creative responses
@@ -230,6 +230,7 @@ async function runAdversarialBattle(): Promise<AdversarialBattle> {
         sellerRewards: refereeResult.sellerRewards,
       }),
       math_defense_score: refereeResult.closerRewards.priceMaintained ? 10 : 0,
+    } as any)
       humanity_score: refereeResult.closerRewards.vocalSoul,
       success_score: refereeResult.closerRewards.clause17Success ? 10 : 0,
       verbal_yes_to_memorandum: refereeResult.closerRewards.clause17Success,
@@ -241,13 +242,13 @@ async function runAdversarialBattle(): Promise<AdversarialBattle> {
     .select()
     .single();
 
-  if (saveError) {
+  if (saveError || !adversarialBattle) {
     logger.error('Error saving adversarial battle', { error: saveError });
-    throw saveError;
+    throw saveError || new Error('Failed to save adversarial battle');
   }
 
   return {
-    id: adversarialBattle.id,
+    id: (adversarialBattle as any).id,
     closerScore: refereeResult.closerScore,
     sellerScore: refereeResult.sellerScore,
     closerRewards: refereeResult.closerRewards,

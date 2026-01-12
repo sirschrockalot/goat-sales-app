@@ -11,6 +11,7 @@ import { useSearchParams } from 'next/navigation';
 import { motion, useSpring, useTransform, AnimatePresence } from 'framer-motion';
 import { useVapi } from '@/contexts/VapiContext';
 import { getCurrentStep, checkApprovalDenialGate, getPersonaConfig } from '@/lib/personas';
+import { getVoicePersonaLabel } from '@/lib/voiceRegions';
 import ConfidenceGauge from '@/components/call/ConfidenceGauge';
 import ScriptProgress from '@/components/call/ScriptProgress';
 import VoiceCoach from '@/components/call/VoiceCoach';
@@ -337,7 +338,7 @@ export default function LiveCallHUD({ gauntletLevel, exitStrategy = 'fix_and_fli
           </div>
           <button
             onClick={() => {
-              resumeFromHold();
+              // resumeFromHold not available in VapiContext
               setShowUnderwriterResponse(false);
               setHoldProgress(0);
             }}
@@ -399,9 +400,30 @@ export default function LiveCallHUD({ gauntletLevel, exitStrategy = 'fix_and_fli
           {/* Main HUD with Gauges */}
           <motion.div
             initial={{ y: 100, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
+            animate={
+              scriptTracker.isGoatModeActive
+                ? {
+                    y: 0,
+                    opacity: 1,
+                    scale: [1, 1.02, 1],
+                    boxShadow: [
+                      `0 0 ${30 + audioIntensity * 40}px rgba(16, 185, 129, ${0.6 + audioIntensity * 0.4})`,
+                      `0 0 ${50 + audioIntensity * 60}px rgba(16, 185, 129, ${0.8 + audioIntensity * 0.2})`,
+                      `0 0 ${30 + audioIntensity * 40}px rgba(16, 185, 129, ${0.6 + audioIntensity * 0.4})`,
+                    ],
+                  }
+                : { y: 0, opacity: 1 }
+            }
             exit={{ y: 100, opacity: 0 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            transition={
+              scriptTracker.isGoatModeActive
+                ? {
+                    duration: 1.5,
+                    repeat: Infinity,
+                    ease: 'easeInOut',
+                  }
+                : { type: 'spring', damping: 25, stiffness: 200 }
+            }
             className="rounded-xl p-4 border backdrop-blur-sm pointer-events-auto transition-all duration-300"
             style={{
               backgroundColor: 'rgba(255, 255, 255, 0.05)',
@@ -411,25 +433,8 @@ export default function LiveCallHUD({ gauntletLevel, exitStrategy = 'fix_and_fli
                 ? heatStreak.color
                 : 'rgba(255, 255, 255, 0.1)',
               boxShadow: scriptTracker.isGoatModeActive
-                ? `0 0 ${30 + audioIntensity * 40}px rgba(16, 185, 129, ${0.6 + audioIntensity * 0.4}), 0 0 ${60 + audioIntensity * 60}px rgba(16, 185, 129, ${0.3 + audioIntensity * 0.3})`
+                ? undefined // Handled by animate prop
                 : heatStreak.borderGlow,
-            }}
-            animate={
-              scriptTracker.isGoatModeActive
-                ? {
-                    scale: [1, 1.02, 1],
-                    boxShadow: [
-                      `0 0 ${30 + audioIntensity * 40}px rgba(16, 185, 129, ${0.6 + audioIntensity * 0.4})`,
-                      `0 0 ${50 + audioIntensity * 60}px rgba(16, 185, 129, ${0.8 + audioIntensity * 0.2})`,
-                      `0 0 ${30 + audioIntensity * 40}px rgba(16, 185, 129, ${0.6 + audioIntensity * 0.4})`,
-                    ],
-                  }
-                : {}
-            }
-            transition={{
-              duration: 1.5,
-              repeat: scriptTracker.isGoatModeActive ? Infinity : 0,
-              ease: 'easeInOut',
             }}
           >
         {/* Gauges */}

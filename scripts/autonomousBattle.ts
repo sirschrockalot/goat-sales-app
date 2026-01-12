@@ -6,6 +6,7 @@
 import OpenAI from 'openai';
 import { supabaseAdmin } from '../src/lib/supabase';
 import { getEnvironmentConfig, assertSandboxMode, validateEnvironmentConfig } from '../config/environments';
+import { getEnvironmentConfig as getEnvConfig, getOpenAIModel } from '../src/lib/env-manager';
 import logger from '../src/lib/logger';
 import { injectTextures, getTextureInjectionProbability } from '../src/lib/acousticTextures';
 import { generateCoTReasoning, formatCoTAsThinking, stripThinkingTags } from '../src/lib/chainOfThought';
@@ -19,8 +20,11 @@ import {
 import * as fs from 'fs-extra';
 import * as path from 'path';
 
+// Initialize OpenAI with Sandbox API key (from env-manager)
+// This ensures autonomousBattle.ts uses Sandbox credentials, not Production
+const envConfig = getEnvConfig();
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || '',
+  apiKey: envConfig.openai.apiKey,
 });
 
 interface BattleState {
@@ -224,10 +228,12 @@ async function executeTurn(
     }
   }
 
-  // Always use GPT-4o-Mini for battles (cost-effective)
-  const modelToUse = 'gpt-4o-mini';
+  // Use env-manager for model selection: Closer = GPT-4o, Seller/Referee = GPT-4o-mini
+  const modelToUse = isCloserTurn 
+    ? getOpenAIModel('closer')  // GPT-4o for Closer
+    : getOpenAIModel('seller'); // GPT-4o-mini for Sellers/Referees
 
-  // Call GPT-4o-Mini for the battle
+  // Call OpenAI for the battle
   const completion = await openai.chat.completions.create({
     model: modelToUse,
     messages: apiMessages,
@@ -238,12 +244,12 @@ async function executeTurn(
   const inputTokens = completion.usage?.prompt_tokens || 0;
   const outputTokens = completion.usage?.completion_tokens || 0;
 
-  // Calculate and log cost for this turn
-  const turnCost = calculateOpenAICost('gpt-4o-mini', inputTokens, outputTokens);
+  // Calculate and log cost for this turn (use actual model used)
+  const turnCost = calculateOpenAICost(modelToUse as 'gpt-4o-mini' | 'gpt-4o', inputTokens, outputTokens);
   await logCost(
     {
       provider: 'openai',
-      model: 'gpt-4o-mini',
+      model: modelToUse,
       inputTokens,
       outputTokens,
       cost: turnCost,

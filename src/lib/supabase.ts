@@ -4,7 +4,6 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import logger from './logger';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -16,9 +15,10 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 let supabaseAdminInstance: ReturnType<typeof createClient> | null = null;
 
 if (typeof window === 'undefined') {
-  // Server-side only
+  // Server-side only - lazy load logger to avoid winston in client bundles
   if (!supabaseUrl || !supabaseServiceKey) {
-    logger.error('Missing Supabase environment variables', { 
+    // Use console for client-safe error logging
+    console.error('Missing Supabase environment variables', { 
       hasUrl: !!supabaseUrl, 
       hasServiceKey: !!supabaseServiceKey 
     });
@@ -52,7 +52,8 @@ export const createSupabaseClient = () => {
 
   if (!supabaseUrl || !supabaseAnonKey) {
     const error = 'Missing client-side Supabase environment variables (NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY)';
-    logger.error('Supabase admin client creation error', { error });
+    // Use console for client-safe error logging
+    console.error('Supabase admin client creation error', { error });
     // Throw error so it's clear what's missing
     throw new Error(error);
   }
@@ -67,7 +68,7 @@ export const createSupabaseClient = () => {
 
   // Store as singleton only on client-side
   if (typeof window !== 'undefined') {
-    supabaseClientInstance = client;
+    supabaseClientInstance = client as ReturnType<typeof createClient>;
   }
 
   return client;

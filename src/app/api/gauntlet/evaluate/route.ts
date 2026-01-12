@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin, createSupabaseClient } from '@/lib/supabase';
+import { createSupabaseClient } from '@/lib/supabase';
 import { getGauntletLevel } from '@/lib/gauntletLevels';
 import logger from '@/lib/logger';
 
@@ -33,6 +33,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Get supabaseAdmin
+    const { supabaseAdmin } = await import('@/lib/supabase');
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Database not available' }, { status: 500 });
+    }
+
     // Get the call record
     const { data: call, error: callError } = await supabaseAdmin
       .from('calls')
@@ -48,7 +54,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const goatScore = call.goat_score;
+    const callData = call as any;
+    const goatScore = callData.goat_score;
     if (!goatScore) {
       return NextResponse.json(
         { error: 'Call has not been graded yet' },
@@ -70,17 +77,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const currentLevel = profile.gauntlet_level || 1;
-    const progress = (profile.gauntlet_progress as Record<string, number>) || {};
+    const profileData = profile as any;
+    const currentLevel = profileData.gauntlet_level || 1;
+    const progress = (profileData.gauntlet_progress as Record<string, number>) || {};
 
     // Extract gauntlet level from call metadata or persona_id
     let callLevel: number | null = null;
-    if (call.metadata && typeof call.metadata === 'object') {
-      callLevel = (call.metadata as any).gauntlet_level || null;
+    if (callData.metadata && typeof callData.metadata === 'object') {
+      callLevel = (callData.metadata as any).gauntlet_level || null;
     }
-    if (!callLevel && call.persona_id) {
+    if (!callLevel && callData.persona_id) {
       // Try to extract from persona_id (e.g., "gauntlet-3")
-      const match = call.persona_id.match(/gauntlet[_-]?(\d+)/i);
+      const match = callData.persona_id.match(/gauntlet[_-]?(\d+)/i);
       if (match) {
         callLevel = parseInt(match[1]);
       }
@@ -111,12 +119,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Update profile
-    const { error: updateError } = await supabaseAdmin
+    const { error: updateError } = await (supabaseAdmin as any)
       .from('profiles')
       .update({
         gauntlet_level: newLevel,
         gauntlet_progress: progress,
-      })
+      } as any)
       .eq('id', userId);
 
     if (updateError) {

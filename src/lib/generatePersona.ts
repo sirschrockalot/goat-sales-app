@@ -107,6 +107,7 @@ export function generatePersona(
   const difficultyPrompt = getDifficultyPrompt(difficulty);
   const resistanceLogic = getResistanceLogic(difficulty);
   const gateTestingLogic = getGateTestingLogic(difficulty);
+  const financialFramework = exitStrategy ? getFinancialFrameworkPrompt(exitStrategy) : undefined;
 
   // SSML guidance for empathetic statements
   const ssmlGuidance = `SSML INJECTION FOR EMPATHETIC STATEMENTS:

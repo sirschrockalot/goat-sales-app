@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+
 import OpenAI from 'openai';
 import logger from '@/lib/logger';
 
@@ -36,10 +36,16 @@ export async function POST(request: NextRequest) {
     const { table = 'script_segments' } = body;
     const tableName = table === 'dispo' ? 'dispo_script_segments' : 'script_segments';
 
+    // Get supabaseAdmin
+    const { supabaseAdmin } = await import('@/lib/supabase');
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Database not available' }, { status: 500 });
+    }
+
     // Update the segment with the embedding
-    const { error: updateError } = await supabaseAdmin
+    const { error: updateError } = await (supabaseAdmin as any)
       .from(tableName)
-      .update({ embedding })
+      .update({ embedding } as any)
       .eq('id', segmentId);
 
     if (updateError) {

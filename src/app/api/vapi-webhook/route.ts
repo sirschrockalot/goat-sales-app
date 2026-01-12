@@ -9,7 +9,7 @@ import { gradeDispoCall } from '@/lib/dispoGrading';
 import { analyzeDeviation } from '@/lib/analyzeDeviation';
 import { analyzeSentiment } from '@/lib/analyzeSentiment';
 import { analyzeVoicePerformance } from '@/lib/voicePerformance';
-import { supabaseAdmin } from '@/lib/supabase';
+
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
 import { getUserFromRequest } from '@/lib/getUserFromRequest';
 import { processCallCompletion } from '@/lib/callActions';
@@ -100,96 +100,104 @@ export async function POST(request: NextRequest) {
     const body: VapiWebhookPayload = await request.json();
 
     // Handle Aircall webhook format (from Chrome Extension)
-    if (body.aircallCallId || body.type === 'aircall_call_end') {
-      const transcript = body.transcript || '';
-      const userId = body.userId || body.metadata?.userId || 'aircall-user';
-      const phoneNumber = body.phoneNumber || body.metadata?.phoneNumber;
-      const recordingUrl = body.recordingUrl || body.recording_url;
-      const aircallCallId = body.aircallCallId || body.call?.id;
+    const bodyData = body as any;
+    if (bodyData.aircallCallId || bodyData.type === 'aircall_call_end') {
+      const transcript = bodyData.transcript || '';
+      const userId = bodyData.userId || bodyData.metadata?.userId || 'aircall-user';
+      const phoneNumber = bodyData.phoneNumber || bodyData.metadata?.phoneNumber;
+      const recordingUrl = bodyData.recordingUrl || bodyData.recording_url;
+      const aircallCallId = bodyData.aircallCallId || bodyData.call?.id;
 
       if (!transcript) {
         return NextResponse.json({ received: true, message: 'No transcript provided' }, { status: 200 });
       }
 
       // Determine persona mode (default to acquisition for Aircall calls)
-      const personaMode = body.personaMode || body.metadata?.personaMode || 'acquisition';
+      const personaMode = bodyData.personaMode || bodyData.metadata?.personaMode || 'acquisition';
 
       // Grade the call using appropriate grading function
       const gradingResult = personaMode === 'disposition' 
         ? await gradeDispoCall(transcript)
-        : await gradeCall(transcript, false); // Aircall doesn't support role reversal
+        : await gradeCall(transcript, undefined, undefined, undefined, false); // Aircall doesn't support role reversal
 
       // Analyze script deviation (pass mode for correct table selection)
       const deviationAnalysis = await analyzeDeviation(transcript, personaMode);
 
       // Calculate logic gates based on mode
+      const gradingResultData = gradingResult as any;
       const logicGates = personaMode === 'disposition' ? [
         {
           name: 'The Hook (The Numbers)',
-          passed: gradingResult.logicGates.hook === 'pass',
+          passed: gradingResultData.logicGates.hook === 'pass',
         },
         {
           name: 'The Narrative (Comp Analysis)',
-          passed: gradingResult.logicGates.narrative === 'pass',
+          passed: gradingResultData.logicGates.narrative === 'pass',
         },
         {
           name: 'The Scarcity Anchor',
-          passed: gradingResult.logicGates.scarcity === 'pass',
+          passed: gradingResultData.logicGates.scarcity === 'pass',
         },
         {
           name: 'The Terms',
-          passed: gradingResult.logicGates.terms === 'pass',
+          passed: gradingResultData.logicGates.terms === 'pass',
         },
         {
           name: 'The Clinch (Assignment)',
-          passed: gradingResult.logicGates.clinch === 'pass',
+          passed: gradingResultData.logicGates.clinch === 'pass',
         },
         {
           name: 'Tonality',
-          passed: gradingResult.logicGates.tonality >= 7,
-          score: gradingResult.logicGates.tonality,
+          passed: gradingResultData.logicGates.tonality >= 7,
+          score: gradingResultData.logicGates.tonality,
         },
       ] : [
         {
           name: 'Approval/Denial Intro',
-          passed: gradingResult.logicGates.intro === 'pass',
+          passed: gradingResultData.logicGates.intro === 'pass',
         },
         {
           name: 'Fact-Finding',
-          passed: gradingResult.logicGates.why === 'found',
+          passed: gradingResultData.logicGates.motivation === 'found',
         },
         {
           name: 'Property Condition',
-          passed: gradingResult.logicGates.propertyCondition === 'pass',
+          passed: gradingResultData.logicGates.condition === 'pass',
         },
         {
           name: 'Tone',
-          passed: gradingResult.logicGates.tone >= 7,
-          score: gradingResult.logicGates.tone,
+          passed: gradingResultData.logicGates.tone >= 7,
+          score: gradingResultData.logicGates.tone,
         },
         {
           name: 'The Clinch',
-          passed: gradingResult.logicGates.clinch === 'pass',
+          passed: gradingResultData.logicGates.commitment === 'pass',
         },
       ];
 
+      // Get supabaseAdmin
+      const { supabaseAdmin } = await import('@/lib/supabase');
+      if (!supabaseAdmin) {
+        return NextResponse.json({ error: 'Database not available' }, { status: 500 });
+      }
+
       // Store in database
-      const { data, error } = await supabaseAdmin
+      const { data, error } = await (supabaseAdmin as any)
         .from('calls')
         .insert({
           user_id: userId,
           transcript: transcript,
-          goat_score: gradingResult.goatScore,
+          goat_score: gradingResultData.goatScore,
           recording_url: recordingUrl || null,
           persona_mode: 'acquisition', // Default for real calls
           call_status: 'ended',
           logic_gates: logicGates,
-          rebuttal_of_the_day: gradingResult.rebuttalOfTheDay,
+          rebuttal_of_the_day: gradingResultData.rebuttalOfTheDay,
           script_adherence: deviationAnalysis, // Store deviation analysis
           ended_at: new Date().toISOString(),
           // Store Aircall metadata
-          persona_id: `aircall-${body.aircallCallId}`,
-        })
+          persona_id: `aircall-${bodyData.aircallCallId}`,
+        } as any)
         .select()
         .single();
 
@@ -204,7 +212,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         callId: data.id,
-        goatScore: gradingResult.goatScore,
+        goatScore: gradingResultData.goatScore,
         source: 'aircall',
       });
     }
@@ -216,20 +224,20 @@ export async function POST(request: NextRequest) {
     }
 
     const { call } = body;
+    const callData = call as any;
     
     // Set context for logging
     logger.setContext({
-      callId: call.id,
-      assistantId: call.metadata?.personaId,
-      userId: call.metadata?.userId,
+      callId: callData.id,
+      assistantId: callData.metadata?.personaId,
+      userId: callData.metadata?.userId,
     });
-    
-    let transcript = call.transcript || '';
-    let userId = call.metadata?.userId;
-    const personaMode = call.metadata?.personaMode || 'acquisition';
-    const personaId = call.metadata?.personaId;
-    const manuallyTriggered = call.metadata?.manuallyTriggered || false;
-    const roleReversal = call.metadata?.roleReversal === true || call.metadata?.learningMode === true;
+    let transcript = callData.transcript || '';
+    let userId = callData.metadata?.userId;
+    const personaMode = callData.metadata?.personaMode || 'acquisition';
+    const personaId = callData.metadata?.personaId;
+    const manuallyTriggered = callData.metadata?.manuallyTriggered || false;
+    const roleReversal = callData.metadata?.roleReversal === true || callData.metadata?.learningMode === true;
 
     // If manually triggered and missing userId, try to get from auth
     if (!userId && manuallyTriggered) {
@@ -258,13 +266,19 @@ export async function POST(request: NextRequest) {
       }, { status: 200 });
     }
 
+    // Get supabaseAdmin for Vapi path
+    const { supabaseAdmin } = await import('@/lib/supabase');
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Database not available' }, { status: 500 });
+    }
+
     // Analyze script deviation (pass mode for correct table selection)
     const deviationAnalysis = await analyzeDeviation(transcript, personaMode);
 
     // Grade the call using appropriate grading function (pass roleReversal for Learning Mode)
       // Get exit strategy from metadata if available
       // Extract exit strategy from metadata or determine from transcript
-      let exitStrategy = (call.metadata as any)?.exitStrategy || 'fix_and_flip';
+      let exitStrategy = callData.metadata?.exitStrategy || 'fix_and_flip';
       
       // Try to extract exit strategy from transcript if not in metadata
       if (!exitStrategy || exitStrategy === 'fix_and_flip') {
@@ -288,19 +302,31 @@ export async function POST(request: NextRequest) {
         .replace('sub_to', 'subject_to')
         .replace('seller_carry', 'seller_finance');
       
+      // Calculate call duration from metadata (needed before grading)
+      const callStartTime = callData.metadata?.callStartTime 
+        ? new Date(callData.metadata.callStartTime).getTime()
+        : Date.now() - 300000; // Default 5 minutes if not provided
+      const callEndTime = Date.now();
+      const callDuration = Math.floor((callEndTime - callStartTime) / 1000); // Duration in seconds
+      
       // Calculate rep talk time from transcript (estimate based on transcript length and call duration)
       // This is an approximation - in production, you'd track this from Vapi SDK events
       const callDurationSeconds = callDuration || (transcript.length > 0 ? Math.ceil(transcript.length / 10) : 0); // Rough estimate: 10 chars per second
-      const repTranscript = transcript.split('\n').filter(line => 
+      const repTranscript = transcript.split('\n').filter((line: string) => 
         line.toLowerCase().includes('rep:') || 
         line.toLowerCase().includes('user:') ||
         (!line.toLowerCase().includes('ai:') && !line.toLowerCase().includes('seller:'))
       ).join(' ');
       const repTalkTimeSeconds = repTranscript.length > 0 ? Math.ceil(repTranscript.length / 10) : Math.ceil(callDurationSeconds * 0.5); // Estimate 50% if no clear markers
       
+      // Extract gauntlet level and callId (needed for grading)
+      const gauntletLevel = callData.metadata?.gauntletLevel || 
+        (personaId?.includes('gauntlet') ? parseInt(personaId.split('-')[1]) : null);
+      const callId = callData.id;
+      
       // Grade the call with neural coaching metrics
       const gradingResult = personaMode === 'disposition' 
-        ? await gradeDispoCall(transcript, userId, callId, gauntletLevel)
+        ? await gradeDispoCall(transcript)
         : await gradeCall(
             transcript, 
             userId, 
@@ -311,69 +337,62 @@ export async function POST(request: NextRequest) {
             repTalkTimeSeconds
           );
 
+      const gradingResultData = gradingResult as any;
+
       // Calculate logic gates array for database based on mode
       const logicGates = personaMode === 'disposition' ? [
         {
           name: 'The Hook (The Numbers)',
-          passed: gradingResult.logicGates.hook === 'pass',
+          passed: gradingResultData.logicGates.hook === 'pass',
         },
         {
           name: 'The Narrative (Comp Analysis)',
-          passed: gradingResult.logicGates.narrative === 'pass',
+          passed: gradingResultData.logicGates.narrative === 'pass',
         },
         {
           name: 'The Scarcity Anchor',
-          passed: gradingResult.logicGates.scarcity === 'pass',
+          passed: gradingResultData.logicGates.scarcity === 'pass',
         },
         {
           name: 'The Terms',
-          passed: gradingResult.logicGates.terms === 'pass',
+          passed: gradingResultData.logicGates.terms === 'pass',
         },
         {
           name: 'The Clinch (Assignment)',
-          passed: gradingResult.logicGates.clinch === 'pass',
+          passed: gradingResultData.logicGates.clinch === 'pass',
         },
         {
           name: 'Tonality',
-          passed: gradingResult.logicGates.tonality >= 7,
-          score: gradingResult.logicGates.tonality,
+          passed: gradingResultData.logicGates.tonality >= 7,
+          score: gradingResultData.logicGates.tonality,
         },
       ] : [
         {
           name: 'Approval/Denial Intro',
-          passed: gradingResult.logicGates.intro === 'pass',
+          passed: gradingResultData.logicGates.intro === 'pass',
         },
         {
           name: 'Fact-Finding',
-          passed: gradingResult.logicGates.why === 'found',
+          passed: gradingResultData.logicGates.why === 'found',
         },
         {
           name: 'Property Condition',
-          passed: gradingResult.logicGates.propertyCondition === 'pass',
+          passed: gradingResultData.logicGates.propertyCondition === 'pass',
         },
         {
           name: 'Tone',
-          passed: gradingResult.logicGates.tone >= 7,
-          score: gradingResult.logicGates.tone,
+          passed: gradingResultData.logicGates.tone >= 7,
+          score: gradingResultData.logicGates.tone,
         },
         {
           name: 'The Clinch',
-          passed: gradingResult.logicGates.clinch === 'pass',
+          passed: gradingResultData.logicGates.commitment === 'pass',
         },
       ];
 
-        // Extract gauntlet level from metadata if present
-        const gauntletLevel = call.metadata?.gauntletLevel || 
-          (personaId?.includes('gauntlet') ? parseInt(personaId.split('-')[1]) : null);
-
-        // Calculate call duration and Goat Mode duration from metadata
-        const callStartTime = call.metadata?.callStartTime 
-          ? new Date(call.metadata.callStartTime).getTime()
-          : Date.now() - 300000; // Default 5 minutes if not provided
-        const callEndTime = Date.now();
-        const callDuration = Math.floor((callEndTime - callStartTime) / 1000); // Duration in seconds
-        const goatModeDuration = call.metadata?.goatModeDuration || 0; // Seconds in Goat Mode
-        const scriptHiddenDuration = call.metadata?.scriptHiddenDuration || 0; // Pro Mode duration
+        // Goat Mode duration from metadata (callDuration already calculated above)
+        const goatModeDuration = callData.metadata?.goatModeDuration || 0; // Seconds in Goat Mode
+        const scriptHiddenDuration = callData.metadata?.scriptHiddenDuration || 0; // Pro Mode duration
 
         // Award XP if Goat Mode was active or Pro Mode time was spent
         if (goatModeDuration > 0 || scriptHiddenDuration > 0) {
@@ -386,7 +405,7 @@ export async function POST(request: NextRequest) {
                 callDuration,
                 goatModeDuration,
                 scriptHiddenDuration, // Include Pro Mode duration for 1.5x XP multiplier
-                goatScore: gradingResult.goatScore,
+                goatScore: gradingResultData.goatScore,
               }),
             });
           } catch (error) {
@@ -409,7 +428,7 @@ export async function POST(request: NextRequest) {
               // Save each suggested improvement to ai_optimizations table
               for (const improvement of sentimentAnalysis.suggestedImprovements) {
                 try {
-                  await supabaseAdmin
+                  await (supabaseAdmin as any)
                     .from('ai_optimizations')
                     .insert({
                       assistant_id: assistantId,
@@ -420,7 +439,7 @@ export async function POST(request: NextRequest) {
                       humanity_score: sentimentAnalysis.humanityScore,
                       priority: improvement.priority,
                       applied: false,
-                    });
+                    } as any);
                 } catch (error) {
                   logger.error('Error saving AI optimization', { error, assistantId });
                 }
@@ -428,31 +447,31 @@ export async function POST(request: NextRequest) {
             }
           } catch (error) {
             // Silently fail - sentiment analysis is not critical
-            logger.debug('Error analyzing sentiment (non-critical)', { error, callId: call.id });
+            logger.debug('Error analyzing sentiment (non-critical)', { error, callId: callData.id });
           }
         }
 
         // Store in database
-        const { data, error } = await supabaseAdmin
+        const { data, error } = await (supabaseAdmin as any)
           .from('calls')
           .insert({
             user_id: userId,
             transcript: transcript,
-            goat_score: gradingResult.goatScore,
-            recording_url: call.recordingUrl || null,
+            goat_score: gradingResultData.goatScore,
+            recording_url: callData.recordingUrl || null,
             persona_mode: personaMode,
             persona_id: personaId,
             call_status: 'ended',
             logic_gates: logicGates,
-            rebuttal_of_the_day: gradingResult.rebuttalOfTheDay,
+            rebuttal_of_the_day: gradingResultData.rebuttalOfTheDay,
             script_adherence: deviationAnalysis, // Store deviation analysis
             script_hidden_duration: scriptHiddenDuration, // Pro Mode duration for XP multiplier
             // Deal tracking fields
-            contract_signed: gradingResult.dealTracking?.contractSigned || false,
-            suggested_buy_price: gradingResult.dealTracking?.suggestedBuyPrice || null,
-            final_offer_price: gradingResult.dealTracking?.finalOfferPrice || null,
-            price_variance: gradingResult.dealTracking?.priceVariance || null,
-            test_stability_value: call.metadata?.testStabilityValue || null, // Save test stability for A/B testing
+            contract_signed: gradingResultData.dealTracking?.contractSigned || false,
+            suggested_buy_price: gradingResultData.dealTracking?.suggestedBuyPrice || null,
+            final_offer_price: gradingResultData.dealTracking?.finalOfferPrice || null,
+            price_variance: gradingResultData.dealTracking?.priceVariance || null,
+            test_stability_value: callData.metadata?.testStabilityValue || null, // Save test stability for A/B testing
             exit_strategy_chosen: normalizedExitStrategy || null, // Store exit strategy for auditing "Top Earner" decision-making
             metadata: {
               ...(gauntletLevel ? { gauntlet_level: gauntletLevel } : {}),
@@ -465,16 +484,16 @@ export async function POST(request: NextRequest) {
               // Store exit strategy for negotiation precision scoring
               exitStrategy: exitStrategy,
               // Store negotiation precision scores
-              negotiationPrecision: gradingResult.negotiationPrecision || null,
+              negotiationPrecision: gradingResultData.negotiationPrecision || null,
               // Store hold data for validation
-              holdDuration: call.metadata?.holdDuration || 0,
-              holdCount: call.metadata?.holdCount || 0,
-              priceChangesWithoutHold: gradingResult.advocacy?.holdUtilization?.priceChangesWithoutHold || 0,
+              holdDuration: callData.metadata?.holdDuration || 0,
+              holdCount: callData.metadata?.holdCount || 0,
+              priceChangesWithoutHold: gradingResultData.advocacy?.holdUtilization?.priceChangesWithoutHold || 0,
               // Model selection logging for cost optimization audit
-              model_used: call.metadata?.model_used || null,
-              reason_for_selection: call.metadata?.reason_for_selection || null,
-              daily_spend_at_selection: call.metadata?.daily_spend_at_selection || null,
-              session_type: call.metadata?.session_type || null,
+              model_used: callData.metadata?.model_used || null,
+              reason_for_selection: callData.metadata?.reason_for_selection || null,
+              daily_spend_at_selection: callData.metadata?.daily_spend_at_selection || null,
+              session_type: callData.metadata?.session_type || null,
             },
             ended_at: new Date().toISOString(),
           })
@@ -482,7 +501,7 @@ export async function POST(request: NextRequest) {
           .single();
 
     if (error) {
-      logger.error('Error storing call in database', { error, callId: call.id });
+      logger.error('Error storing call in database', { error, callId: callData.id });
       return NextResponse.json(
         { 
           error: 'Failed to store call',
@@ -494,20 +513,20 @@ export async function POST(request: NextRequest) {
 
     // Process call completion: detect commitment and trigger contract if needed
     try {
-      const propertyAddress = call.metadata?.propertyAddress || transcript.match(/address[:\s]+([^\n]+)/i)?.[1] || 'Unknown';
-      const sellerName = call.metadata?.sellerName || transcript.match(/(?:hi|hello|this is)\s+([A-Z][a-z]+\s+[A-Z][a-z]+)/i)?.[1] || 'Seller';
-      const sellerEmail = call.metadata?.sellerEmail || null;
-      const offerPrice = gradingResult.dealTracking?.finalOfferPrice || gradingResult.dealTracking?.suggestedBuyPrice || null;
+      const propertyAddress = callData.metadata?.propertyAddress || transcript.match(/address[:\s]+([^\n]+)/i)?.[1] || 'Unknown';
+      const sellerName = callData.metadata?.sellerName || transcript.match(/(?:hi|hello|this is)\s+([A-Z][a-z]+\s+[A-Z][a-z]+)/i)?.[1] || 'Seller';
+      const sellerEmail = callData.metadata?.sellerEmail || null;
+      const offerPrice = gradingResultData.dealTracking?.finalOfferPrice || gradingResultData.dealTracking?.suggestedBuyPrice || null;
       const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-      const transcriptUrl = `${appUrl}/calls/${data.id}`;
+      const transcriptUrl = `${appUrl}/calls/${(data as any).id}`;
 
       // Extract ARV and repairs from transcript or metadata
-      const estimatedARV = call.metadata?.estimatedARV || call.metadata?.arv || null;
-      const estimatedRepairs = call.metadata?.estimatedRepairs || call.metadata?.repairs || null;
+      const estimatedARV = callData.metadata?.estimatedARV || callData.metadata?.arv || null;
+      const estimatedRepairs = callData.metadata?.estimatedRepairs || callData.metadata?.repairs || null;
 
       // Process standard call completion (contract generation)
       const callActions = await processCallCompletion(
-        call.id,
+        callData.id,
         transcript,
         propertyAddress,
         sellerName,
@@ -515,16 +534,16 @@ export async function POST(request: NextRequest) {
         offerPrice || undefined,
         normalizedExitStrategy || undefined,
         {
-          callId: call.id,
+          callId: callData.id,
           userId: userId,
-          contractSigned: gradingResult.dealTracking?.contractSigned || false,
+          contractSigned: gradingResultData.dealTracking?.contractSigned || false,
         }
       );
 
       // Process escalation for high-margin deals ($15k+ spread)
       if (callActions.commitmentDetected && offerPrice && sellerEmail) {
         const escalationResult = await processEscalation(
-          call.id,
+          callData.id,
           transcript,
           propertyAddress,
           sellerName,
@@ -538,7 +557,7 @@ export async function POST(request: NextRequest) {
 
         if (escalationResult.smsSent || escalationResult.contractSent) {
           logger.info('Escalation processed', {
-            callId: call.id,
+            callId: callData.id,
             smsSent: escalationResult.smsSent,
             contractSent: escalationResult.contractSent,
             contractUrl: escalationResult.contractUrl,
@@ -548,22 +567,22 @@ export async function POST(request: NextRequest) {
 
       if (callActions.commitmentDetected) {
         logger.info('Commitment detected in call', {
-          callId: call.id,
+          callId: callData.id,
           contractTriggered: callActions.contractTriggered,
           contractUrl: callActions.contractUrl,
         });
       }
     } catch (actionError) {
-      logger.error('Error processing call actions', { error: actionError, callId: call.id });
+      logger.error('Error processing call actions', { error: actionError, callId: callData.id });
       // Don't fail the webhook if action processing fails
     }
 
     // Update optimizations with call_id now that we have it
     if (sentimentAnalysis && sentimentAnalysis.humanityScore < 80) {
       try {
-        await supabaseAdmin
+        await (supabaseAdmin as any)
           .from('ai_optimizations')
-          .update({ call_id: data.id })
+          .update({ call_id: (data as any).id } as any)
           .is('call_id', null)
           .eq('assistant_id', personaId || 'unknown')
           .gte('created_at', new Date(Date.now() - 60000).toISOString()); // Last minute
@@ -589,7 +608,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       callId: data.id,
-      goatScore: gradingResult.goatScore,
+      goatScore: gradingResultData.goatScore,
     });
   } catch (error) {
     logger.error('Error processing webhook', { error });

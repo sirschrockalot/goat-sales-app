@@ -217,14 +217,14 @@ async function processBreakthrough(battle: any): Promise<void> {
 
   // Update battle with breakthrough data
   if (supabaseAdmin) {
-    await supabaseAdmin
+    await (supabaseAdmin as any)
       .from('sandbox_battles')
       .update({
         status: 'pending_review',
         defining_moment: definingMoment,
         tactical_snippet: tacticalSnippet,
         breakthrough_detected_at: new Date().toISOString(),
-      })
+      } as any)
       .eq('id', battle.id);
   }
 
@@ -315,7 +315,12 @@ export function initializeTacticalScout(): () => void {
         });
 
         // Fetch full battle data with persona info
-        const { data: battle, error } = await supabaseAdmin
+        const { supabaseAdmin: adminClient } = await import('./supabase');
+        if (!adminClient) {
+          logger.error('Supabase admin client not available');
+          return;
+        }
+        const { data: battle, error } = await adminClient
           .from('sandbox_battles')
           .select(`
             *,
@@ -365,7 +370,12 @@ export function initializeTacticalScout(): () => void {
         });
 
         // Fetch full battle data
-        const { data: battle, error } = await supabaseAdmin
+        const { supabaseAdmin: adminClient } = await import('./supabase');
+        if (!adminClient) {
+          logger.error('Supabase admin client not available');
+          return;
+        }
+        const { data: battle, error } = await adminClient
           .from('sandbox_battles')
           .select(`
             *,
@@ -401,6 +411,7 @@ export function initializeTacticalScout(): () => void {
  * Check existing battles for breakthroughs (one-time scan)
  */
 export async function scanExistingBreakthroughs(): Promise<number> {
+  const { supabaseAdmin } = await import('./supabase');
   if (!supabaseAdmin) {
     throw new Error('Supabase admin client not available');
   }
@@ -428,12 +439,13 @@ export async function scanExistingBreakthroughs(): Promise<number> {
   }
 
   let processed = 0;
-  for (const battle of battles || []) {
+  const battlesData = (battles as any[]) || [];
+  for (const battle of battlesData) {
     try {
       await processBreakthrough(battle);
       processed++;
     } catch (error) {
-      logger.error('Error processing breakthrough', { battleId: battle.id, error });
+      logger.error('Error processing breakthrough', { battleId: (battle as any).id, error });
     }
   }
 

@@ -6,6 +6,8 @@
  * Uses exact colors and spacing from UI_SPEC.md
  */
 
+export const dynamic = 'force-dynamic';
+
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useVapi } from '@/contexts/VapiContext';

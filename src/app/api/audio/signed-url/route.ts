@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+
 import logger from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
@@ -31,6 +31,12 @@ export async function GET(request: NextRequest) {
       
       if (urlMatch) {
         const [, , bucket, path] = urlMatch;
+        
+        // Get supabaseAdmin
+        const { supabaseAdmin } = await import('@/lib/supabase');
+        if (!supabaseAdmin) {
+          return NextResponse.json({ error: 'Database not available' }, { status: 500 });
+        }
         
         // Generate signed URL with 60 minute expiration
         const { data, error } = await supabaseAdmin.storage

@@ -7,7 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+
 import OpenAI from 'openai';
 import logger from '@/lib/logger';
 
@@ -102,10 +102,16 @@ export async function POST(request: NextRequest) {
     // Generate embedding
     const embedding = await generateEmbedding(rebuttal_text);
 
+    // Get supabaseAdmin
+    const { supabaseAdmin } = await import('@/lib/supabase');
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Database not available' }, { status: 500 });
+    }
+
     // Update the row with the embedding using Supabase Admin client (bypasses RLS)
-    const { error: updateError } = await supabaseAdmin
+    const { error: updateError } = await (supabaseAdmin as any)
       .from('rebuttals')
-      .update({ embedding })
+      .update({ embedding } as any)
       .eq('id', id);
 
     if (updateError) {

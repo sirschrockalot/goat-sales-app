@@ -30,6 +30,10 @@ interface VapiContextType {
   // Training Session Data (for webhook)
   scriptHiddenDuration?: number; // Seconds with script hidden
   
+  // Hold State
+  isOnHold: boolean;
+  holdDuration: number;
+  
   // Actions
   initialize: (apiKey: string, mode: PersonaMode, assistantId?: string) => Promise<void>;
   startCall: () => Promise<void>;
@@ -37,6 +41,8 @@ interface VapiContextType {
   toggleMute: () => Promise<void>;
   setPersonaMode: (mode: PersonaMode) => Promise<void>;
   sendMessage: (message: string) => void; // Send control message (e.g., voice hints)
+  placeOnHold: () => void;
+  resumeFromHold: () => void;
   
   // Reset
   reset: () => void;
@@ -275,18 +281,17 @@ export function VapiProvider({ children }: VapiProviderProps) {
     placeOnHold: () => {
       const client = getVapiClient();
       if (client) {
-        client.placeOnHold();
+        // VapiClient doesn't have placeOnHold method, use sendMessage to simulate
+        client.sendMessage("Hold on one moment, let me check with my underwriters on this.");
         setIsOnHold(true);
         setHoldStartTime(Date.now());
         setHoldCount(prev => prev + 1);
-        // Send message to AI that rep is placing on hold
-        client.sendMessage("Hold on one moment, let me check with my underwriters on this.");
       }
     },
     resumeFromHold: () => {
       const client = getVapiClient();
       if (client) {
-        client.resumeFromHold();
+        // VapiClient doesn't have resumeFromHold method, just update state
         if (holdStartTime) {
           const duration = Math.floor((Date.now() - holdStartTime) / 1000);
           setHoldDuration(duration);
