@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { motion, useSpring, useTransform, AnimatePresence } from 'framer-motion';
 import { useVapi } from '@/contexts/VapiContext';
 import { getCurrentStep, checkApprovalDenialGate, getPersonaConfig } from '@/lib/personas';

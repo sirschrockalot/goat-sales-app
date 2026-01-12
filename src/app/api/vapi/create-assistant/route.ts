@@ -178,13 +178,9 @@ export async function POST(request: NextRequest) {
     const modelSelectionLog = formatModelSelectionForLogging(modelSelection);
 
     // Create assistant via Vapi API
-    const response = await fetch('https://api.vapi.ai/assistant', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${vapiSecretKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
+    // Note: Vapi automatically publishes assistants when they're created successfully
+    // We don't need to set a 'published' field - it's not accepted by the API
+    const assistantPayload: any = {
         name: assistantName,
         model: useCentralizedConfig && centralizedConfig
           ? {
@@ -210,98 +206,131 @@ export async function POST(request: NextRequest) {
               ],
             },
         voice: (() => {
+          // Helper function to add fallback to any voice config
+          const addVoiceFallback = (voiceConfig: any) => {
+            return {
+              ...voiceConfig,
+              // Add fallback plan for reliability (Vapi uses fallbackPlan, not fallback)
+              // This ensures calls can continue even if ElevenLabs has issues
+              fallbackPlan: {
+                voices: [
+                  {
+                    provider: 'openai',
+                    voiceId: 'alloy', // OpenAI's professional voice (available without additional config)
+                  },
+                ],
+              },
+            };
+          };
+
           // Learning Mode (roleReversal=true): Use centralized config with test stability for A/B testing
           if (useCentralizedConfig && centralizedConfig) {
-            return {
-              provider: centralizedConfig.voice.provider,
-              voiceId: centralizedConfig.voice.voiceId, // nPczCjzI2devNBz1zWls (Brian)
-              model: centralizedConfig.voice.model,
-              stability: testStabilityValue, // Use test stability for A/B testing (overrides context-aware)
-              similarityBoost: centralizedConfig.voice.similarityBoost, // 0.8
-              ...(centralizedConfig.voice.style !== undefined && {
-                style: centralizedConfig.voice.style, // Context-aware: 0.15 (rapport) or 0.05 (contract)
-              }),
-            };
+            // Full voice configuration with ElevenLabs settings (model, stability, similarityBoost)
+            // Now that ElevenLabs integration is back, we can use full voice control
+            return addVoiceFallback({
+              provider: '11labs',
+              voiceId: centralizedConfig.voice.voiceId, // Brian - Deep, Resonant and Comforting (from vapiConfig)
+              model: centralizedConfig.voice.model, // eleven_turbo_v2_5
+              stability: centralizedConfig.voice.stability, // Context-aware stability
+              similarityBoost: centralizedConfig.voice.similarityBoost, // 0.8 for consistency
+            });
           }
           
-          // Learning Mode (roleReversal=true): AI is acquisition agent, use Brian - Professional Closer with test stability
+          // Learning Mode (roleReversal=true): AI is acquisition agent, use Brian - Professional Closer
           if (isRoleReversal && validPersonaMode === 'acquisition') {
             const closerConfig = getElevenLabsCloserConfig();
-            return {
+            return addVoiceFallback({
               provider: closerConfig.provider,
               voiceId: closerConfig.voiceId,
               model: closerConfig.model,
-              stability: testStabilityValue, // Use test stability for A/B testing
+              stability: closerConfig.stability,
               similarityBoost: closerConfig.similarityBoost,
-              ...(voiceSettings.style !== undefined && {
-                style: voiceSettings.style, // Context-aware style
-              }),
-            };
+            });
           }
           
           // Practice Mode (roleReversal=false, acquisition): Use regional voice if propertyLocation provided
           if (!isRoleReversal && validPersonaMode === 'acquisition' && propertyLocation) {
             const regionalConfig = getRegionalVoiceConfig(propertyLocation);
-            return {
-              provider: 'elevenlabs',
+            // Regional voices use default ElevenLabs settings
+            return addVoiceFallback({
+              provider: '11labs',
               voiceId: regionalConfig.voiceId,
               model: 'eleven_turbo_v2_5',
-              stability: testStabilityValue, // Use test stability for A/B testing
-              similarityBoost: regionalConfig.similarityBoost || 0.75,
-              // Note: speed is not directly supported in Vapi voice config, but can be adjusted via SSML
-            };
+              stability: 0.5,
+              similarityBoost: 0.75,
+            });
           }
           
-          // Practice Mode (roleReversal=false, acquisition): AI is seller, use Stella for fast responses (no propertyLocation)
+          // Practice Mode (roleReversal=false, acquisition): AI is seller, use Stella for fast responses
           if (!isRoleReversal && validPersonaMode === 'acquisition') {
             const sellerConfig = getElevenLabsSellerConfig();
-            return {
+            return addVoiceFallback({
               provider: sellerConfig.provider,
               voiceId: sellerConfig.voiceId,
               model: sellerConfig.model,
-              stability: testStabilityValue, // Use test stability for A/B testing
+              stability: sellerConfig.stability,
               similarityBoost: sellerConfig.similarityBoost,
-            };
+            });
           }
           
           // Acquisitions Gauntlet: Use regional voice if propertyLocation provided
           if (gauntletLevel && validPersonaMode === 'acquisition' && propertyLocation) {
             const regionalConfig = getRegionalVoiceConfig(propertyLocation);
-            return {
-              provider: 'elevenlabs',
+            return addVoiceFallback({
+              provider: '11labs',
               voiceId: regionalConfig.voiceId,
               model: 'eleven_turbo_v2_5',
-              stability: testStabilityValue, // Use test stability for A/B testing
-              similarityBoost: regionalConfig.similarityBoost || 0.75,
-            };
+              stability: 0.5,
+              similarityBoost: 0.75,
+            });
           }
           
-          // Acquisitions Gauntlet: AI is seller, use Stella for fast responses (no propertyLocation)
+          // Acquisitions Gauntlet: AI is seller, use Stella for fast responses
           if (gauntletLevel && validPersonaMode === 'acquisition') {
             const sellerConfig = getElevenLabsSellerConfig();
-            return {
+            return addVoiceFallback({
               provider: sellerConfig.provider,
               voiceId: sellerConfig.voiceId,
               model: sellerConfig.model,
-              stability: testStabilityValue, // Use test stability for A/B testing
+              stability: sellerConfig.stability,
               similarityBoost: sellerConfig.similarityBoost,
-            };
+            });
           }
           
-          // Default: Use persona voice with test stability for A/B testing
-          return {
+          // Default: Use persona voice with full ElevenLabs configuration
+          return addVoiceFallback({
             provider: '11labs',
             voiceId: persona.voice,
-            stability: testStabilityValue, // Use test stability for A/B testing
-          };
+            model: 'eleven_turbo_v2_5',
+            stability: 0.5,
+            similarityBoost: 0.75,
+          });
         })(),
-        // Configure Deepgram STT for fast transcription (250ms endpointing)
+        // Configure Deepgram STT for fast transcription with improved sensitivity
+        // Add OpenAI as fallback for reliability
+        // Note: Vapi API maximum endpointing is 500ms, so we use that for both modes
+        // The prompt instructions ensure Learning Mode pauses and waits for responses
         transcriber: (() => {
           const deepgramConfig = getDeepgramSTTConfig();
+          // Vapi API maximum is 500ms - use that for both Learning and Practice modes
+          // The system prompt instructions handle pausing behavior in Learning Mode
           return {
             provider: deepgramConfig.provider,
             model: deepgramConfig.model,
-            endpointing: deepgramConfig.endpointing,
+            endpointing: deepgramConfig.endpointing, // 500ms (Vapi maximum) - gives time for speech completion
+            language: deepgramConfig.language, // en-US for better accuracy
+            // Note: punctuate and smart_format are not supported in Vapi API
+            // These may be configured via Deepgram directly or in Vapi Dashboard settings
+            // Add fallback plan for reliability (Vapi uses fallbackPlan, not fallback)
+            // Vapi requires specific OpenAI transcriber models: gpt-4o-transcribe or gpt-4o-mini-transcribe
+            fallbackPlan: {
+              transcribers: [
+                {
+                  provider: 'openai',
+                  model: 'gpt-4o-mini-transcribe', // Vapi's required format for OpenAI transcriber fallback
+                },
+              ],
+            },
           };
         })(),
         firstMessage: useCentralizedConfig && centralizedConfig
@@ -311,11 +340,32 @@ export async function POST(request: NextRequest) {
         // Enable fillers and backchanneling for more human-like conversation
         // Note: These properties are configured via the Vapi SDK on the client-side, not in the assistant creation API
         fillersEnabled: true,
-        backchannelingEnabled: true,
-        // Configure background sound to allow ambient noise
-        // "off" disables noise filtering, allowing ambient sounds to be heard
-        // This enables the "quiet office" ambient noise effect
-        backgroundSound: 'off',
+        backchannelingEnabled: true, // Enable backchanneling so AI can say "Mm-hmm" or "Okay" while caller speaks
+        // Configure turn-taking to prevent AI from steamrolling the caller
+        // Start Speaking Plan: Controls when AI begins speaking after caller finishes
+        startSpeakingPlan: {
+          waitSeconds: 0.8, // Wait 800ms after caller finishes before responding (prevents interruption)
+        },
+        // Stop Speaking Plan: Controls when AI stops if caller interrupts
+        stopSpeakingPlan: {
+          voiceSeconds: 0.2, // Stop if caller speaks for 0.2 seconds (allows natural interruption)
+        },
+        // Configure background speech denoising to filter out user's background noise
+        // This prevents background noise from interrupting the AI agent
+        // NOTE: Re-enabled because background noise was causing the agent to stop talking
+        backgroundSpeechDenoisingPlan: {
+          smartDenoisingPlan: {
+            enabled: true, // Enable intelligent noise reduction using Krisp
+          },
+          fourierDenoisingPlan: {
+            enabled: true, // Enable additional noise filtering
+            mediaDetectionEnabled: true, // Detect and filter media-related noise
+            baselineOffsetDb: -10, // Noise reduction level (-10dB)
+            windowSizeMs: 2000, // Adaptation speed to noise changes (2 seconds)
+            baselinePercentile: 90, // Focus on clear speech by setting noise threshold
+          },
+        },
+        // Note: backgroundSound is kept disabled to avoid adding artificial noise
         // Enable control API for voice hints
         serverUrl: process.env.NEXT_PUBLIC_APP_URL
           ? `${process.env.NEXT_PUBLIC_APP_URL}/api/vapi-webhook`
@@ -339,7 +389,83 @@ export async function POST(request: NextRequest) {
           daily_spend_at_selection: modelSelectionLog.daily_spend,
           session_type: modelSelectionLog.session_type,
         },
-      }),
+      };
+
+    // Validate voice provider is correct format
+    if (assistantPayload.voice && assistantPayload.voice.provider !== '11labs') {
+      console.warn(`⚠️  Voice provider mismatch: ${assistantPayload.voice.provider}, forcing to '11labs'`);
+      assistantPayload.voice.provider = '11labs';
+    }
+
+    // Validate and ensure all required voice fields are present
+    if (assistantPayload.voice) {
+      // Validate voice ID exists (not a name)
+      if (!assistantPayload.voice.voiceId) {
+        console.error('❌ Voice ID is missing! This will cause the assistant creation to fail.');
+      } else if (assistantPayload.voice.voiceId.length < 10 || !/^[a-zA-Z0-9_-]+$/.test(assistantPayload.voice.voiceId)) {
+        console.warn(`⚠️  Voice ID "${assistantPayload.voice.voiceId}" may be invalid. Expected format: alphanumeric string`);
+      }
+      
+      // Ensure all required ElevenLabs fields are present for full voice control
+      // With custom ElevenLabs credentials, we can use the full configuration
+      if (!assistantPayload.voice.model) {
+        assistantPayload.voice.model = 'eleven_turbo_v2_5';
+      }
+      if (assistantPayload.voice.stability === undefined) {
+        assistantPayload.voice.stability = 0.5;
+      }
+      if (assistantPayload.voice.similarityBoost === undefined) {
+        assistantPayload.voice.similarityBoost = 0.75;
+      }
+      
+      console.log('✅ Using full ElevenLabs voice configuration:', {
+        provider: assistantPayload.voice.provider,
+        voiceId: assistantPayload.voice.voiceId,
+        model: assistantPayload.voice.model,
+        stability: assistantPayload.voice.stability,
+        similarityBoost: assistantPayload.voice.similarityBoost,
+      });
+    }
+
+    // Log the payload for debugging (remove sensitive data)
+    console.log('Creating Vapi assistant with payload:', JSON.stringify({
+      ...assistantPayload,
+      model: { ...assistantPayload.model, messages: '[REDACTED]' },
+      voice: assistantPayload.voice
+    }, null, 2));
+    
+    // Log voice configuration for troubleshooting
+    console.log('Voice configuration:', {
+      provider: assistantPayload.voice?.provider,
+      voiceId: assistantPayload.voice?.voiceId,
+      model: assistantPayload.voice?.model,
+      stability: assistantPayload.voice?.stability,
+      similarityBoost: assistantPayload.voice?.similarityBoost,
+      note: 'If you see "Couldn\'t Find 11labs Voice" error, either: 1) Remove ElevenLabs credentials from Vapi Dashboard to use Vapi-provided voices, or 2) Verify this voice ID exists in your ElevenLabs account'
+    });
+
+    // Log the full voice object being sent - this is critical for debugging
+    console.log('\n🔍 VOICE CONFIGURATION BEING SENT TO VAPI:');
+    console.log(JSON.stringify(assistantPayload.voice, null, 2));
+    console.log(`Voice ID: ${assistantPayload.voice?.voiceId}`);
+    console.log(`Provider: ${assistantPayload.voice?.provider}`);
+    console.log('\n');
+    
+    // Additional debugging info
+    console.log('📝 Voice Object Details:');
+    console.log(`  - Provider: ${assistantPayload.voice?.provider}`);
+    console.log(`  - Voice ID: ${assistantPayload.voice?.voiceId}`);
+    console.log(`  - Object keys: ${Object.keys(assistantPayload.voice || {}).join(', ')}`);
+    console.log(`  - Full object: ${JSON.stringify(assistantPayload.voice)}`);
+    console.log('\n');
+
+    const response = await fetch('https://api.vapi.ai/assistant', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${vapiSecretKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(assistantPayload),
     });
 
     if (!response.ok) {
@@ -363,19 +489,84 @@ export async function POST(request: NextRequest) {
         errorMessage = errorText || `HTTP ${response.status} ${response.statusText}`;
         console.error('Vapi API error (text):', errorDetails);
       }
+      // Enhanced error message for voice-related errors
+      let enhancedMessage = errorMessage;
+      if (errorMessage.includes('11labs Voice') || errorMessage.includes('Couldn\'t Find')) {
+        enhancedMessage = `${errorMessage}\n\n🔧 TROUBLESHOOTING:\n` +
+          `Voice ID "${assistantPayload.voice?.voiceId}" is correct in your ElevenLabs account, but Vapi can't find it.\n\n` +
+          `This usually means:\n` +
+          `1. The voice sync hasn't completed yet (wait 1-2 minutes after resetting API key)\n` +
+          `2. Your ElevenLabs API key might not have the right permissions\n` +
+          `3. There's a mismatch between Vapi's voice library and your account\n\n` +
+          `SOLUTIONS (try in order):\n` +
+          `1. Wait 2-3 minutes after syncing, then try again\n` +
+          `2. Verify your ElevenLabs API key has "Unrestricted" permissions (not "Limited")\n` +
+          `3. Remove custom credentials temporarily to test:\n` +
+          `   - Go to Vapi Dashboard → Settings → Integrations → ElevenLabs\n` +
+          `   - Remove/Disconnect your ElevenLabs API key\n` +
+          `   - Try creating an assistant (this will use Vapi's default voices)\n` +
+          `   - If that works, the issue is with your custom credentials setup\n\n` +
+          `Current voice config: provider="${assistantPayload.voice?.provider}", voiceId="${assistantPayload.voice?.voiceId}"`;
+      }
+      
       return NextResponse.json(
         { 
           error: 'Failed to create Vapi assistant',
-          message: errorMessage,
+          message: enhancedMessage,
           details: errorDetails,
           status: response.status,
-          statusText: response.statusText
+          statusText: response.statusText,
+          voiceConfig: {
+            provider: assistantPayload.voice?.provider,
+            voiceId: assistantPayload.voice?.voiceId,
+            troubleshooting: 'See message above for troubleshooting steps'
+          }
         },
         { status: response.status }
       );
     }
 
     const assistant = await response.json();
+
+    // After assistant creation, update it to ensure background speech denoising is enabled
+    // This prevents background noise from interrupting the AI agent
+    // Some settings may need to be set via PATCH if they weren't accepted in POST
+    try {
+      const updatePayload: any = {
+        backgroundSpeechDenoisingPlan: {
+          smartDenoisingPlan: {
+            enabled: true,
+          },
+          fourierDenoisingPlan: {
+            enabled: true,
+            mediaDetectionEnabled: true,
+            baselineOffsetDb: -10,
+            windowSizeMs: 2000,
+            baselinePercentile: 90,
+          },
+        },
+      };
+
+      const updateResponse = await fetch(`https://api.vapi.ai/assistant/${assistant.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${vapiSecretKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updatePayload),
+      });
+
+      if (updateResponse.ok) {
+        console.log('✅ Background speech denoising settings updated successfully');
+      } else {
+        // Log but don't fail - assistant was created successfully
+        const updateError = await updateResponse.text();
+        console.warn('⚠️ Could not update background denoising settings (assistant created successfully):', updateError);
+      }
+    } catch (updateError) {
+      // Log but don't fail - assistant was created successfully
+      console.warn('⚠️ Error updating background denoising settings (assistant created successfully):', updateError);
+    }
 
     return NextResponse.json({
       success: true,

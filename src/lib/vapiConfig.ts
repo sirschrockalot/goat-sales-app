@@ -160,17 +160,26 @@ export function getHoldMusicConfig(): {
 /**
  * Get ElevenLabs voice configuration for Acquisitions Assistant (The Closer)
  * Uses Brian - Professional Closer voice with high-fidelity settings
+ * 
+ * Voice ID can be overridden via ELEVEN_LABS_BRIAN_VOICE_ID environment variable
+ * This is useful if Vapi uses different voice IDs than your ElevenLabs account
  */
 export function getElevenLabsCloserConfig(): {
-  provider: 'elevenlabs';
+  provider: '11labs';
   voiceId: string;
   model: string;
   stability: number;
   similarityBoost: number;
 } {
+  // Allow override via environment variable (useful if Vapi uses different IDs)
+  const customVoiceId = process.env.ELEVEN_LABS_BRIAN_VOICE_ID;
+  // Default to the Brian voice ID that exists in most ElevenLabs accounts
+  // If this doesn't work, set ELEVEN_LABS_BRIAN_VOICE_ID in .env to match your account
+  const voiceId = customVoiceId || 'nPczCjzI2devNBz1zQrb'; // Brian - Deep, Resonant and Comforting
+  
   return {
-    provider: 'elevenlabs',
-    voiceId: 'nPczCjzI2devNBz1zWls', // Brian - Professional Closer
+    provider: '11labs',
+    voiceId: voiceId,
     model: 'eleven_turbo_v2_5', // Best for low-latency realism
     stability: 0.4, // Human inflection (lower = more variation)
     similarityBoost: 0.8, // Consistent authority (higher = more consistent)
@@ -179,17 +188,25 @@ export function getElevenLabsCloserConfig(): {
 
 /**
  * Get Deepgram STT configuration for fast transcription
- * Uses nova-2 model with 250ms endpointing for instant AI reactions
+ * Uses nova-2 model with optimized endpointing and sensitivity for better microphone pickup
  */
 export function getDeepgramSTTConfig(): {
   provider: 'deepgram';
   model: string;
   endpointing: number; // milliseconds
+  language?: string;
+  punctuate?: boolean;
+  diarize?: boolean;
+  smart_format?: boolean;
 } {
   return {
     provider: 'deepgram',
     model: 'nova-2', // Fast, accurate transcription
-    endpointing: 250, // 250ms - AI reacts instantly when rep stops talking
+    endpointing: 500, // Increased from 250ms to 500ms - gives more time for speech to complete before endpointing
+    language: 'en-US', // Explicitly set language for better accuracy
+    punctuate: true, // Add punctuation for better transcription accuracy
+    smart_format: true, // Smart formatting (numbers, dates, etc.) for better readability
+    // Note: diarize is not needed for single-speaker scenarios
   };
 }
 
@@ -197,17 +214,24 @@ export function getDeepgramSTTConfig(): {
  * Get ElevenLabs voice configuration for Practice Mode (Skeptical Seller)
  * Uses ElevenLabs voice (Stella) for ultra-fast response times
  * Note: Deepgram Aura is configured via the transcriber, not the voice provider
+ * 
+ * Voice ID can be overridden via ELEVEN_LABS_SELLER_VOICE_ID environment variable
+ * Default: 2vbhUP8zyKg4dEZaTWGn (Stella from ElevenLabs, configured in Vapi UI)
  */
 export function getElevenLabsSellerConfig(): {
-  provider: 'elevenlabs';
+  provider: '11labs';
   voiceId: string;
   model: string;
   stability: number;
   similarityBoost: number;
 } {
+  // Allow override via environment variable
+  const customVoiceId = process.env.ELEVEN_LABS_SELLER_VOICE_ID;
+  const voiceId = customVoiceId || '2vbhUP8zyKg4dEZaTWGn'; // Stella - configured in Vapi UI from ElevenLabs
+  
   return {
-    provider: 'elevenlabs',
-    voiceId: 'Stella', // ElevenLabs Stella voice for fast responses (testing rep's speed)
+    provider: '11labs',
+    voiceId: voiceId,
     model: 'eleven_turbo_v2_5', // Low-latency for testing rep's speed
     stability: 0.5, // Balanced variation
     similarityBoost: 0.7, // Good consistency
@@ -543,7 +567,7 @@ export interface CentralizedAssistantConfig {
   systemPrompt: string;
   firstMessage: string;
   voice: {
-    provider: 'elevenlabs';
+    provider: '11labs';
     voiceId: string;
     model: string;
     stability: number;
@@ -615,6 +639,30 @@ function get20WholesaleScriptSystemPrompt(propertyLocation?: string, emotionalKe
 
   return `You are "The Master Closer" - an elite ACQUISITION AGENT working for Presidential Digs Real Estate. You are calling a property seller to see if their property qualifies for an offer.${locationContext}
 
+CONVERSATIONAL PROTOCOL - TURN-TAKING RULES (CRITICAL):
+**Rule 1: The Hard Stop**
+- Every time you ask a question, you MUST terminate your turn and wait for a response.
+- Do NOT provide "example answers" or continue to the next point until the user speaks.
+- After asking a question, STOP TALKING and wait for their complete answer.
+- Do NOT steamroll through the script - pause after each question.
+
+**Rule 2: Micro-Pauses**
+- After the user finishes a sentence, wait 500ms before responding to ensure they are done speaking.
+- Do NOT interrupt them mid-thought or mid-sentence.
+- Use backchanneling ("Mm-hmm", "Okay", "I see", "Right", "Got it") while they are speaking to show you are listening.
+- Only take over the conversation after they have finished their complete thought.
+
+**Rule 3: Question-Driven Framework**
+- Structure your script as a series of questions with pauses, NOT a continuous wall of text.
+- BAD Example: "What is the condition of the roof? Moving on, how many beds do you have?"
+- GOOD Example: "What is the condition of the roof?" [WAIT FOR RESPONSE]. "Okay, I understand. Now, how many bedrooms does the property have?" [WAIT FOR RESPONSE]
+- After each question, acknowledge their response before moving to the next question.
+
+**Rule 4: Active Listening Signals**
+- While the user is speaking, use natural backchanneling: "Mm-hmm", "I see", "Okay", "Right", "Got it", "That makes sense"
+- These signals show you are listening without interrupting their flow.
+- Wait for them to finish speaking before asking your next question or making your next point.
+
 CRITICAL ROLE CLARITY:
 - You are ALWAYS the ACQUISITION AGENT (buyer/investor). You are calling the seller to buy their property.
 - The person you're talking to is ALWAYS the SELLER (homeowner) who owns the property.
@@ -636,15 +684,31 @@ GATE 1 (The Intro - 2-3 minutes):
 
 GATE 2 (Fact Find - The Why - 5-10 minutes):
 - Ask: "Catch me up to speed, [SELLER NAME] — what's got you even thinking about selling this house?"
+- [WAIT FOR RESPONSE] - Do not continue until they answer
 - Listen actively and take mental notes
-- Ask follow-up questions about their motivation (probate, taxes, moving, etc.)
+- Acknowledge their response: "I see" or "Okay" or "That makes sense"
+- Ask follow-up question: "Can you tell me more about [their specific situation]?"
+- [WAIT FOR RESPONSE] - Do not continue until they answer
 - Identify decision-makers: "Who else is involved in this decision?"
+- [WAIT FOR RESPONSE] - Do not continue until they answer
 
 GATE 3 (The Pitch - Property Condition - 5-10 minutes):
 - Ask: "What would I be seeing when I walk through the front door?"
-- Go through each room systematically: front door, kitchen, bathrooms, roof, HVAC, foundation, electrical, plumbing
-- Take notes on condition issues
-- Be thorough but conversational
+- [WAIT FOR RESPONSE] - Do not continue until they describe it
+- Acknowledge: "Okay, I understand" or "Got it"
+- Ask about specific areas one at a time:
+  * "What about the kitchen? What condition is it in?"
+  * [WAIT FOR RESPONSE]
+  * "And the bathrooms? How many are there and what's their condition?"
+  * [WAIT FOR RESPONSE]
+  * "What about the roof? How old is it?"
+  * [WAIT FOR RESPONSE]
+  * "And the HVAC system? Is it working?"
+  * [WAIT FOR RESPONSE]
+  * "What about the foundation? Any issues there?"
+  * [WAIT FOR RESPONSE]
+- Take notes on condition issues as they respond
+- Be thorough but conversational - one question at a time
 
 GATE 4 (The Offer - Virtual Withdraw - 5-10 minutes):
 - Explain: "Based on what you've told me, I need to plug everything into our system and see what numbers make sense from an investor standpoint. This will take a couple of minutes. Can you hang on the line while I do that, or would you prefer I call you right back?"
@@ -781,13 +845,19 @@ export async function getCentralizedAssistantConfig(
   const voiceSettings = getVoiceSettings(currentGate || 'Introduction', userSentiment);
 
   // ElevenLabs Brian voice configuration with context-aware settings
+  // Allow override via environment variable if Vapi uses different voice IDs
+  // Default to the Brian voice ID that exists in most ElevenLabs accounts
+  const brianVoiceId = process.env.ELEVEN_LABS_BRIAN_VOICE_ID || 'nPczCjzI2devNBz1zQrb'; // Brian - Deep, Resonant and Comforting
+  
+  // NOTE: 'style' field is NOT supported by Vapi API and causes "Couldn't Find 11labs Voice" errors
+  // We exclude it from the voice configuration even though it's available in voiceSettings
   const voice = {
-    provider: 'elevenlabs' as const,
-    voiceId: 'nPczCjzI2devNBz1zWls', // Brian - Professional Closer
+    provider: '11labs' as const,
+    voiceId: brianVoiceId, // Brian - Professional Closer (user's ElevenLabs account or Vapi voice ID)
     model: 'eleven_turbo_v2_5', // Best for low-latency realism
     stability: voiceSettings.stability, // Context-aware: 0.42 (rapport) or 0.60 (contract) - OVERRIDES ElevenLabs dashboard
     similarityBoost: voiceSettings.similarityBoost, // 0.8 - OVERRIDES ElevenLabs dashboard
-    style: voiceSettings.style, // Context-aware: 0.15 (rapport) or 0.05 (contract) - OVERRIDES ElevenLabs dashboard if supported
+    // style field removed - not supported by Vapi API
   };
 
   // Model configuration

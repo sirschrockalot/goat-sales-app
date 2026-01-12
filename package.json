@@ -35,7 +35,12 @@
     "test:ai-services": "tsx scripts/test-ai-services.ts",
     "archive:calls": "tsx scripts/archive-calls.ts",
     "audit:knowledge": "tsx scripts/knowledgeAudit.ts",
-    "audit:knowledge:protect": "tsx scripts/knowledgeAudit.ts --auto-protect"
+    "audit:knowledge:protect": "tsx scripts/knowledgeAudit.ts --auto-protect",
+    "vapi:list": "tsx scripts/list-vapi-assistants.ts",
+    "vapi:cleanup": "tsx scripts/cleanup-vapi-assistants.ts --delete",
+    "elevenlabs:voices": "tsx scripts/list-elevenlabs-voices.ts",
+    "vapi:remove-unpublished": "tsx scripts/remove-unpublished-or-error-assistants.ts",
+    "vapi:remove-unpublished:delete": "tsx scripts/remove-unpublished-or-error-assistants.ts --delete --yes"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.90.1",

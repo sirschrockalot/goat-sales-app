@@ -178,6 +178,105 @@ async function testDeepgram(): Promise<void> {
 }
 
 /**
+ * Test creating a Vapi assistant with a specific voice ID and full ElevenLabs configuration
+ */
+async function testVapiAssistantCreation(): Promise<void> {
+  console.log(`\n${colors.blue}${colors.bold}Testing Vapi Assistant Creation with ElevenLabs Voice...${colors.reset}`);
+  
+  const secretKey = process.env.VAPI_SECRET_KEY;
+  const brianVoiceId = process.env.ELEVEN_LABS_BRIAN_VOICE_ID || 'nPczCjzI2devNBz1zQrb';
+  const stellaVoiceId = process.env.ELEVEN_LABS_SELLER_VOICE_ID || '2vbhUP8zyKg4dEZaTWGn';
+
+  if (!secretKey) {
+    console.log(`${colors.yellow}⚠️  VAPI_SECRET_KEY not set, skipping test${colors.reset}`);
+    return;
+  }
+
+  // Test both voices with full ElevenLabs configuration
+  const voicesToTest = [
+    { name: 'Brian (Closer)', voiceId: brianVoiceId, stability: 0.4, similarityBoost: 0.8 },
+    { name: 'Stella (Seller)', voiceId: stellaVoiceId, stability: 0.5, similarityBoost: 0.7 },
+  ];
+
+  for (const voice of voicesToTest) {
+    try {
+      console.log(`\n${colors.cyan}Testing ${voice.name} (Voice ID: ${voice.voiceId})${colors.reset}`);
+      
+      // Create assistant with full ElevenLabs configuration
+      const testPayload = {
+        name: `Test Assistant - ${voice.name}`,
+        model: {
+          provider: 'openai',
+          model: 'gpt-4o-mini',
+          temperature: 0.7,
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a test assistant.',
+            },
+          ],
+        },
+        voice: {
+          provider: '11labs',
+          voiceId: voice.voiceId,
+          model: 'eleven_turbo_v2_5',
+          stability: voice.stability,
+          similarityBoost: voice.similarityBoost,
+        },
+        firstMessage: 'Hello, this is a test.',
+      };
+
+      const response = await fetch('https://api.vapi.ai/assistant', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${secretKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(testPayload),
+      });
+
+      if (response.ok) {
+        const assistant = await response.json();
+        console.log(`${colors.green}✅ SUCCESS: ${voice.name} voice verified${colors.reset}`);
+        console.log(`   Assistant ID: ${assistant.id}`);
+        console.log(`   Voice ID: ${voice.voiceId}`);
+        console.log(`   Model: eleven_turbo_v2_5`);
+        console.log(`   Stability: ${voice.stability}, Similarity Boost: ${voice.similarityBoost}`);
+        
+        // Clean up - delete the test assistant
+        try {
+          await fetch(`https://api.vapi.ai/assistant/${assistant.id}`, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Bearer ${secretKey}`,
+            },
+          });
+          console.log(`   ${colors.cyan}→ Test assistant cleaned up${colors.reset}`);
+        } catch (e) {
+          console.log(`   ${colors.yellow}⚠️  Could not clean up test assistant (not critical)${colors.reset}`);
+        }
+      } else {
+        const errorText = await response.text();
+        console.log(`${colors.red}❌ FAILED: Could not create assistant with ${voice.name} voice${colors.reset}`);
+        console.log(`   Status: ${response.status}`);
+        console.log(`   Error: ${errorText}`);
+        
+        // If it's a voice ID error, provide helpful guidance
+        if (errorText.includes('Couldn\'t Find 11labs Voice')) {
+          console.log(`\n   ${colors.yellow}💡 TROUBLESHOOTING:${colors.reset}`);
+          console.log(`   1. Verify voice ID "${voice.voiceId}" exists in your ElevenLabs account`);
+          console.log(`   2. Check Vapi Dashboard → Settings → Integrations → ElevenLabs is configured`);
+          console.log(`   3. Ensure the voice ID matches exactly (case-sensitive)`);
+          console.log(`   4. Try setting ELEVEN_LABS_BRIAN_VOICE_ID or ELEVEN_LABS_SELLER_VOICE_ID in .env if using different IDs`);
+        }
+      }
+    } catch (error: any) {
+      console.log(`${colors.red}❌ ERROR testing ${voice.name}: ${error.message}${colors.reset}`);
+    }
+  }
+}
+
+/**
  * Test Vapi API
  */
 async function testVapi(): Promise<void> {
@@ -341,6 +440,7 @@ async function runTests(): Promise<void> {
   await testDeepgram();
   await testVapi();
   await testVapiAssistantConfig();
+  await testVapiAssistantCreation();
 
   // Print summary
   console.log(`\n${colors.cyan}${colors.bold}`);

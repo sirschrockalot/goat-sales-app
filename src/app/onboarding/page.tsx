@@ -93,26 +93,39 @@ export default function OnboardingPage() {
   }, [user, authLoading]);
 
   const handleCompleteOnboarding = async () => {
-    if (!user) return;
+    if (!user || completing) return; // Prevent double-clicks
 
     setCompleting(true);
     try {
       const response = await fetch('/api/user/complete-onboarding', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // Ensure cookies are sent
       });
 
       if (response.ok) {
-        router.push('/');
+        const data = await response.json();
+        // Wait a moment for the database update to propagate
+        await new Promise(resolve => setTimeout(resolve, 300));
+        // Use replace instead of push to prevent back button issues
+        router.replace('/');
       } else {
-        // Even if API fails, allow user to proceed
-        router.push('/');
+        // If API fails, show error but still allow navigation
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('Failed to complete onboarding:', errorData);
+        // Still navigate - the user should be able to proceed
+        await new Promise(resolve => setTimeout(resolve, 300));
+        router.replace('/');
       }
     } catch (error) {
-      // Allow user to proceed even on error
-      router.push('/');
+      // Log error but still allow navigation
+      console.error('Error completing onboarding:', error);
+      // Still navigate - don't block the user
+      await new Promise(resolve => setTimeout(resolve, 300));
+      router.replace('/');
     } finally {
-      setCompleting(false);
+      // Don't reset completing state immediately - let the navigation happen first
+      // The component will unmount on navigation anyway
     }
   };
 

@@ -102,18 +102,103 @@ export class VapiClient {
 
     // Listen for messages (transcripts come via message events)
     this.vapi.on('message', (message: any) => {
+      console.log('📨 Vapi message event:', message);
+      
       // Check if this is a transcript message
-      if (message.type === 'transcript' || message.transcript) {
+      if (message.type === 'transcript' || message.transcript || message.content) {
+        // Determine role: user messages typically have role='user' or type='user-message'
+        // Assistant messages have role='assistant' or type='assistant-message'
+        let role: 'user' | 'assistant' = 'assistant';
+        
+        if (message.role === 'user' || message.type === 'user-message' || message.type === 'user-transcript') {
+          role = 'user';
+        } else if (message.role === 'assistant' || message.type === 'assistant-message' || message.type === 'assistant-transcript') {
+          role = 'assistant';
+        }
+        
         const event: TranscriptionEvent = {
           type: 'transcript',
-          transcript: message.transcript || message.content || '',
-          role: message.role || 'assistant',
+          transcript: message.transcript || message.content || message.text || '',
+          role: role,
           timestamp: Date.now(),
         };
 
+        console.log('📝 Transcription event created:', { role, transcript: event.transcript.substring(0, 50) + '...' });
         this.transcriptionCallbacks.forEach((callback) => callback(event));
       }
     });
+
+    // Listen for transcript events specifically (Vapi SDK may emit these separately)
+    this.vapi.on('transcript', (transcript: any) => {
+      console.log('📝 Vapi transcript event:', transcript);
+      
+      if (transcript) {
+        const event: TranscriptionEvent = {
+          type: 'transcript',
+          transcript: transcript.transcript || transcript.text || transcript.content || '',
+          role: transcript.role === 'user' ? 'user' : 'assistant',
+          timestamp: Date.now(),
+        };
+
+        console.log('📝 Transcription event from transcript event:', { role: event.role, transcript: event.transcript.substring(0, 50) + '...' });
+        this.transcriptionCallbacks.forEach((callback) => callback(event));
+      }
+    });
+
+    // Listen for user speech events (if available)
+    this.vapi.on('user-speech-start', (data: any) => {
+      console.log('🎤 User speech started:', data);
+    });
+
+    this.vapi.on('user-speech-end', (data: any) => {
+      console.log('🎤 User speech ended:', data);
+    });
+
+    // Listen for assistant speech events
+    this.vapi.on('assistant-speech-start', (data: any) => {
+      console.log('🤖 Assistant speech started:', data);
+    });
+
+    this.vapi.on('assistant-speech-end', (data: any) => {
+      console.log('🤖 Assistant speech ended:', data);
+    });
+
+    // Debug: Log all events to help identify transcription events
+    // This will help us see what events Vapi actually emits
+    const allEvents = [
+      'message',
+      'transcript',
+      'user-transcript',
+      'assistant-transcript',
+      'user-speech-start',
+      'user-speech-end',
+      'assistant-speech-start',
+      'assistant-speech-end',
+      'call-start',
+      'call-end',
+      'status',
+      'error',
+      'function-call',
+      'function-call-result',
+      'tool-calls',
+      'tool-calls-result',
+    ];
+
+    // Add a debug listener for any event we might be missing
+    // Note: This is for debugging - we'll remove or make conditional in production
+    if (process.env.NODE_ENV === 'development') {
+      allEvents.forEach((eventName) => {
+        try {
+          this.vapi?.on(eventName as any, (data: any) => {
+            if (eventName.includes('transcript') || eventName.includes('message') || eventName.includes('speech')) {
+              console.log(`🔍 [DEBUG] Vapi event "${eventName}":`, data);
+            }
+          });
+        } catch (e) {
+          // Event might not exist, that's okay
+        }
+      });
+    }
 
     // Listen for call start
     this.vapi.on('call-start', () => {
@@ -126,7 +211,8 @@ export class VapiClient {
     });
 
     // Listen for call end
-    this.vapi.on('call-end', () => {
+    this.vapi.on('call-end', (data?: any) => {
+      console.log('Call ended:', data);
       this.currentStatus = {
         ...this.currentStatus,
         isActive: false,
@@ -135,9 +221,72 @@ export class VapiClient {
       this.notifyStatusChange();
     });
 
+    // Listen for status updates (includes ejection errors)
+    this.vapi.on('status', (status: any) => {
+      console.log('Vapi status update:', status);
+      // Handle "ejection" or "meeting ended" errors
+      if (status?.message?.includes('ejection') || status?.message?.includes('Meeting has ended')) {
+        console.error('Call was ejected/ended:', status);
+        this.currentStatus = {
+          ...this.currentStatus,
+          isActive: false,
+          status: 'error',
+        };
+        this.notifyStatusChange();
+      }
+    });
+
     // Listen for errors
     this.vapi.on('error', (error: any) => {
-      console.error('Vapi error:', error);
+      // Log full error details for debugging - capture everything
+      const errorDetails = {
+        rawError: error,
+        message: error?.message,
+        error: error?.error,
+        code: error?.code,
+        type: error?.type,
+        status: error?.status,
+        statusCode: error?.statusCode,
+        details: error?.details,
+        // Try to stringify the entire error object
+        fullErrorString: JSON.stringify(error, Object.getOwnPropertyNames(error), 2),
+        // Also try to get stack trace if available
+        stack: error?.stack,
+      };
+      
+      console.error('🚨 Vapi error event triggered:', errorDetails);
+      
+      // Check for specific error messages in multiple places
+      const errorMessage = 
+        error?.message || 
+        error?.error || 
+        error?.details ||
+        error?.fullErrorString ||
+        JSON.stringify(error);
+        
+      const lowerMessage = errorMessage.toLowerCase();
+      
+      if (lowerMessage.includes('ejection') || 
+          lowerMessage.includes('meeting has ended') ||
+          lowerMessage.includes('meeting ended')) {
+        console.error('🚨🚨🚨 CALL EJECTION DETECTED 🚨🚨🚨', {
+          errorDetails,
+          possibleCauses: [
+            '1. Assistant not published/available - Check Vapi Dashboard',
+            '2. Voice configuration issue - Voice ID may not be accessible',
+            '3. Timing issue - Assistant was just created and needs more time',
+            '4. Network/connection issue - Check internet connection',
+            '5. Vapi service issue - Check Vapi status page',
+          ],
+          troubleshooting: [
+            'Wait 5-10 seconds after assistant creation',
+            'Check Vapi Dashboard → Assistants → Verify assistant exists and is published',
+            'Verify ElevenLabs integration is configured correctly',
+            'Check browser console for additional errors',
+          ],
+        });
+      }
+      
       this.currentStatus = {
         ...this.currentStatus,
         status: 'error',
@@ -155,6 +304,17 @@ export class VapiClient {
     }
 
     try {
+      // Verify microphone access before starting call
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        console.log('✅ Microphone access confirmed');
+        // Stop the test stream - we just needed to verify access
+        stream.getTracks().forEach(track => track.stop());
+      } catch (micError) {
+        console.error('❌ Microphone access denied or unavailable:', micError);
+        throw new Error('Microphone access is required. Please allow microphone access and try again.');
+      }
+
       // Update status to connecting
       this.currentStatus = {
         ...this.currentStatus,
@@ -167,22 +327,39 @@ export class VapiClient {
         throw new Error('Assistant ID is required to start a call. Please provide an assistantId when initializing the Vapi client.');
       }
       
+      console.log('📞 Starting call with assistant:', this.config.assistantId);
       const call = await this.vapi.start(this.config.assistantId);
       
       // Call started successfully - status will be updated by call-start event
       if (call) {
+        console.log('✅ Call started successfully:', call);
+        
         // Extract callId and controlUrl from the call object if available
         const callId = (call as any).id || (call as any).callId;
         const controlUrl = (call as any).controlUrl;
         
         if (callId || controlUrl) {
+          console.log('📋 Call info:', { callId, controlUrl });
           this.callInfoCallbacks.forEach((callback) => 
             callback({ callId: callId || '', controlUrl: controlUrl || '' })
           );
         }
+
+        // Check if microphone is muted (this could prevent transcription)
+        if (this.vapi && typeof (this.vapi as any).isMuted === 'function') {
+          const isMuted = (this.vapi as any).isMuted();
+          if (isMuted) {
+            console.warn('⚠️ WARNING: Microphone appears to be muted. User speech may not be transcribed.');
+            // Try to unmute
+            if (typeof (this.vapi as any).setMuted === 'function') {
+              (this.vapi as any).setMuted(false);
+              console.log('🔊 Attempted to unmute microphone');
+            }
+          }
+        }
       }
     } catch (error) {
-      console.error('Error starting call:', error);
+      console.error('❌ Error starting call:', error);
       this.currentStatus = {
         ...this.currentStatus,
         status: 'error',

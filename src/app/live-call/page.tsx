@@ -6,7 +6,7 @@
  * Uses exact colors and spacing from UI_SPEC.md
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useVapi } from '@/contexts/VapiContext';
 import AudioWaveform from '@/components/AudioWaveform';
@@ -99,13 +99,24 @@ export default function LiveCallPage() {
   }, [router, mode]);
 
   // Auto-initialize and start call when component mounts
+  // Use a ref to prevent multiple initializations
+  const hasInitialized = useRef(false);
+  
   useEffect(() => {
+    // Prevent multiple initializations (React StrictMode runs effects twice in dev)
+    if (hasInitialized.current) {
+      return;
+    }
+
     const initAndStart = async () => {
       try {
         const apiKey = process.env.NEXT_PUBLIC_VAPI_API_KEY;
         const assistantId = searchParams.get('assistantId');
         
         if (apiKey) {
+          // Mark as initialized immediately to prevent duplicate calls
+          hasInitialized.current = true;
+          
           // Determine which assistant ID to use
           let finalAssistantId = assistantId;
           
@@ -155,6 +166,7 @@ export default function LiveCallPage() {
                 finalAssistantId = data.assistantId;
               } else if (response.status === 401) {
                 console.error('Unauthorized: Please log in to create assistants');
+                hasInitialized.current = false; // Reset on auth error
                 throw new Error('Authentication required to create assistant');
               } else {
                 // Try to parse error response
@@ -191,33 +203,93 @@ export default function LiveCallPage() {
                 } else {
                   errorMessage = `HTTP ${response.status} ${response.statusText || 'Unknown error'}`;
                 }
+                hasInitialized.current = false; // Reset on error
                 throw new Error(`Failed to create assistant: ${errorMessage}`);
               }
             } catch (error) {
               console.error('Failed to get/create assistant:', error);
+              hasInitialized.current = false; // Reset on error
               throw error;
             }
           }
           
           if (!finalAssistantId) {
+            hasInitialized.current = false; // Reset on error
             throw new Error('Assistant ID is required. Please provide assistantId in URL or configure ACQUISITIONS_ASSISTANT_ID.');
+          }
+          
+          // Verify assistant exists and is ready before starting
+          try {
+            const verifyResponse = await fetch(`/api/vapi/verify-assistant?assistantId=${finalAssistantId}`, {
+              method: 'GET',
+              credentials: 'include',
+            });
+            
+            if (verifyResponse.ok) {
+              const verifyData = await verifyResponse.json();
+              console.log('Assistant verification:', verifyData);
+              
+              if (!verifyData.exists) {
+                throw new Error('Assistant not found. Please try creating a new call.');
+              }
+              
+              if (!verifyData.published && verifyData.error) {
+                console.warn('⚠️ Assistant exists but may have issues:', verifyData.error);
+                // Still try to start - sometimes assistants work even if not marked as published
+              }
+            }
+          } catch (verifyError) {
+            console.warn('Could not verify assistant (will still attempt to start):', verifyError);
+            // Continue anyway - verification is optional
           }
           
           // Initialize with the assistant ID
           await initialize(apiKey, mode, finalAssistantId);
           
-          // Small delay before starting call
-          setTimeout(() => {
-            startCall().catch((error) => {
-              // Error handled by ErrorBoundary
-              if (process.env.NODE_ENV === 'development') {
-                console.error('Failed to start call:', error);
-              }
-            });
-          }, 500);
+          // Wait longer for the assistant to be fully ready
+          // Newly created assistants need time to be published and available
+          console.log('Waiting for assistant to be ready...', { assistantId: finalAssistantId });
+          await new Promise(resolve => setTimeout(resolve, 3000)); // 3 seconds
+          
+          try {
+            console.log('Starting call with assistant:', finalAssistantId);
+            await startCall();
+            console.log('✅ Call started successfully');
+          } catch (error: any) {
+            // Handle specific errors with detailed logging
+            const errorMessage = error?.message || String(error) || '';
+            const errorDetails = {
+              error,
+              message: errorMessage,
+              assistantId: finalAssistantId,
+              timestamp: new Date().toISOString(),
+            };
+            
+            console.error('❌ Call start failed:', errorDetails);
+            
+            if (errorMessage.includes('ejection') || errorMessage.includes('Meeting has ended')) {
+              console.error('🚨 Call ejection detected - possible causes:', {
+                '1. Assistant not published': 'The assistant may not be published yet',
+                '2. Voice configuration issue': 'The voice ID may not be accessible',
+                '3. Timing issue': 'The assistant was just created and needs more time',
+                '4. Network issue': 'Connection problem with Vapi',
+                assistantId: finalAssistantId,
+                suggestion: 'Wait 5-10 seconds after assistant creation before starting call',
+              });
+              
+              // Show user-friendly error and allow retry
+              alert('Call failed to start. The assistant may need more time to be ready. Please wait a few seconds and try again.');
+              hasInitialized.current = false; // Allow retry
+              return; // Don't throw - allow user to retry
+            } else {
+              // Re-throw other errors to be handled by ErrorBoundary
+              throw error;
+            }
+          }
         }
       } catch (error) {
         // Error handled by ErrorBoundary
+        hasInitialized.current = false; // Reset on error to allow retry
         if (process.env.NODE_ENV === 'development') {
           console.error('Failed to initialize/start call:', error);
         }
@@ -225,7 +297,9 @@ export default function LiveCallPage() {
     };
 
     initAndStart();
-  }, [mode, initialize, startCall, searchParams]);
+    // Only depend on values that should trigger re-initialization, not functions
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, searchParams]);
 
   return (
     <ErrorBoundary>

@@ -4,13 +4,13 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin, createSupabaseClient } from '@/lib/supabase';
+import { supabaseAdmin } from '@/lib/supabase';
+import { getUserFromRequest } from '@/lib/getUserFromRequest';
 
 export async function POST(request: NextRequest) {
   try {
-    // Get authenticated user
-    const supabase = createSupabaseClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    // Get authenticated user from request cookies/headers
+    const { user, error: authError } = await getUserFromRequest(request);
 
     if (authError || !user) {
       return NextResponse.json(
