@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import logger from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -48,7 +49,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ rebuttals });
   } catch (error) {
-    console.error('Error fetching admin rebuttals:', error);
+    logger.error('Error fetching admin rebuttals', { error });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -75,7 +76,7 @@ export async function POST(request: NextRequest) {
       .eq('id', rebuttalId);
 
     if (error) {
-      console.error('Error verifying rebuttal:', error);
+      logger.error('Error verifying rebuttal', { error, rebuttalId });
       return NextResponse.json(
         { error: 'Failed to verify rebuttal' },
         { status: 500 }
@@ -84,7 +85,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Error verifying rebuttal:', error);
+    logger.error('Error verifying rebuttal', { error, rebuttalId });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

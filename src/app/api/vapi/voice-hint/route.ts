@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import logger from '@/lib/logger';
 
 interface VoiceHintRequest {
   callId: string;
@@ -52,7 +53,7 @@ export async function POST(request: NextRequest) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Vapi control API error:', errorText);
+      logger.error('Vapi control API error', { error: errorText, callId });
       return NextResponse.json(
         { error: 'Failed to send voice hint', details: errorText },
         { status: response.status }
@@ -83,7 +84,7 @@ export async function POST(request: NextRequest) {
     } catch (dbError) {
       // Non-critical - log but don't fail
       if (process.env.NODE_ENV === 'development') {
-        console.error('Error logging voice hint:', dbError);
+        logger.error('Error logging voice hint', { error: dbError, callId });
       }
     }
 
@@ -93,7 +94,7 @@ export async function POST(request: NextRequest) {
       result,
     });
   } catch (error) {
-    console.error('Error sending voice hint:', error);
+    logger.error('Error sending voice hint', { error, callId });
     return NextResponse.json(
       {
         error: 'Internal server error',

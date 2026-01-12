@@ -13,6 +13,7 @@ import type { GauntletLevel } from '@/lib/gauntletLevels';
 import { getElevenLabsCloserConfig, getElevenLabsSellerConfig, getDeepgramSTTConfig, getCentralizedAssistantConfig, getVoiceSettings, getTestStability, type ScriptGate } from '@/lib/vapiConfig';
 import { getRegionalVoiceConfig, getVoicePersonaLabel } from '@/lib/voiceRegions';
 import { getOptimalModel, determineSessionType, formatModelSelectionForLogging } from '@/lib/modelSwitcher';
+import logger from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
@@ -32,7 +33,7 @@ export async function POST(request: NextRequest) {
     try {
       body = await request.json();
     } catch (error) {
-      console.error('Failed to parse request body:', error);
+      logger.error('Failed to parse request body', { error });
       return NextResponse.json(
         { error: 'Invalid request body', message: 'Request body must be valid JSON' },
         { status: 400 }
@@ -393,7 +394,9 @@ export async function POST(request: NextRequest) {
 
     // Validate voice provider is correct format
     if (assistantPayload.voice && assistantPayload.voice.provider !== '11labs') {
-      console.warn(`⚠️  Voice provider mismatch: ${assistantPayload.voice.provider}, forcing to '11labs'`);
+      logger.warn('Voice provider mismatch, forcing to 11labs', {
+        originalProvider: assistantPayload.voice.provider,
+      });
       assistantPayload.voice.provider = '11labs';
     }
 
@@ -401,9 +404,12 @@ export async function POST(request: NextRequest) {
     if (assistantPayload.voice) {
       // Validate voice ID exists (not a name)
       if (!assistantPayload.voice.voiceId) {
-        console.error('❌ Voice ID is missing! This will cause the assistant creation to fail.');
+        logger.error('Voice ID is missing - assistant creation will fail');
       } else if (assistantPayload.voice.voiceId.length < 10 || !/^[a-zA-Z0-9_-]+$/.test(assistantPayload.voice.voiceId)) {
-        console.warn(`⚠️  Voice ID "${assistantPayload.voice.voiceId}" may be invalid. Expected format: alphanumeric string`);
+        logger.warn('Voice ID may be invalid', {
+          voiceId: assistantPayload.voice.voiceId,
+          expectedFormat: 'alphanumeric string',
+        });
       }
       
       // Ensure all required ElevenLabs fields are present for full voice control
@@ -418,7 +424,7 @@ export async function POST(request: NextRequest) {
         assistantPayload.voice.similarityBoost = 0.75;
       }
       
-      console.log('✅ Using full ElevenLabs voice configuration:', {
+      logger.debug('Using full ElevenLabs voice configuration', {
         provider: assistantPayload.voice.provider,
         voiceId: assistantPayload.voice.voiceId,
         model: assistantPayload.voice.model,
@@ -427,37 +433,23 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Log the payload for debugging (remove sensitive data)
-    console.log('Creating Vapi assistant with payload:', JSON.stringify({
-      ...assistantPayload,
-      model: { ...assistantPayload.model, messages: '[REDACTED]' },
-      voice: assistantPayload.voice
-    }, null, 2));
+    // Log the payload for debugging (sensitive data auto-redacted by logger)
+    logger.debug('Creating Vapi assistant', {
+      payload: {
+        ...assistantPayload,
+        model: { ...assistantPayload.model, messages: '[REDACTED]' },
+        voice: assistantPayload.voice,
+      },
+    });
     
     // Log voice configuration for troubleshooting
-    console.log('Voice configuration:', {
+    logger.debug('Voice configuration details', {
       provider: assistantPayload.voice?.provider,
       voiceId: assistantPayload.voice?.voiceId,
       model: assistantPayload.voice?.model,
       stability: assistantPayload.voice?.stability,
       similarityBoost: assistantPayload.voice?.similarityBoost,
-      note: 'If you see "Couldn\'t Find 11labs Voice" error, either: 1) Remove ElevenLabs credentials from Vapi Dashboard to use Vapi-provided voices, or 2) Verify this voice ID exists in your ElevenLabs account'
     });
-
-    // Log the full voice object being sent - this is critical for debugging
-    console.log('\n🔍 VOICE CONFIGURATION BEING SENT TO VAPI:');
-    console.log(JSON.stringify(assistantPayload.voice, null, 2));
-    console.log(`Voice ID: ${assistantPayload.voice?.voiceId}`);
-    console.log(`Provider: ${assistantPayload.voice?.provider}`);
-    console.log('\n');
-    
-    // Additional debugging info
-    console.log('📝 Voice Object Details:');
-    console.log(`  - Provider: ${assistantPayload.voice?.provider}`);
-    console.log(`  - Voice ID: ${assistantPayload.voice?.voiceId}`);
-    console.log(`  - Object keys: ${Object.keys(assistantPayload.voice || {}).join(', ')}`);
-    console.log(`  - Full object: ${JSON.stringify(assistantPayload.voice)}`);
-    console.log('\n');
 
     const response = await fetch('https://api.vapi.ai/assistant', {
       method: 'POST',
@@ -482,12 +474,12 @@ export async function POST(request: NextRequest) {
         } else if (errorJson.details) {
           errorMessage = typeof errorJson.details === 'string' ? errorJson.details : JSON.stringify(errorJson.details);
         }
-        console.error('Vapi API error (JSON):', errorJson);
+        logger.error('Vapi API error', { errorJson });
       } catch {
         const errorText = await response.text();
         errorDetails = errorText || `HTTP ${response.status} ${response.statusText}`;
         errorMessage = errorText || `HTTP ${response.status} ${response.statusText}`;
-        console.error('Vapi API error (text):', errorDetails);
+        logger.error('Vapi API error (text response)', { errorDetails });
       }
       // Enhanced error message for voice-related errors
       let enhancedMessage = errorMessage;
@@ -527,6 +519,18 @@ export async function POST(request: NextRequest) {
     }
 
     const assistant = await response.json();
+    
+    // Set context for subsequent logs
+    logger.setContext({
+      assistantId: assistant.id,
+      userId,
+    });
+    
+    logger.info('Vapi assistant created successfully', {
+      assistantId: assistant.id,
+      personaMode: validPersonaMode,
+      model: modelSelectionLog.model,
+    });
 
     // After assistant creation, update it to ensure background speech denoising is enabled
     // This prevents background noise from interrupting the AI agent
@@ -557,15 +561,23 @@ export async function POST(request: NextRequest) {
       });
 
       if (updateResponse.ok) {
-        console.log('✅ Background speech denoising settings updated successfully');
+        logger.info('Background speech denoising settings updated successfully', {
+          assistantId: assistant.id,
+        });
       } else {
         // Log but don't fail - assistant was created successfully
         const updateError = await updateResponse.text();
-        console.warn('⚠️ Could not update background denoising settings (assistant created successfully):', updateError);
+        logger.warn('Could not update background denoising settings (assistant created successfully)', {
+          assistantId: assistant.id,
+          error: updateError,
+        });
       }
     } catch (updateError) {
       // Log but don't fail - assistant was created successfully
-      console.warn('⚠️ Error updating background denoising settings (assistant created successfully):', updateError);
+      logger.warn('Error updating background denoising settings (assistant created successfully)', {
+        assistantId: assistant.id,
+        error: updateError,
+      });
     }
 
     return NextResponse.json({
@@ -580,7 +592,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Error creating Vapi assistant:', error);
+    logger.error('Error creating Vapi assistant', { error });
     return NextResponse.json(
       {
         error: 'Internal server error',

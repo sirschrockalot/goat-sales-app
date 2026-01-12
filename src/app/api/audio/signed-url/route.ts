@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import logger from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -37,7 +38,7 @@ export async function GET(request: NextRequest) {
           .createSignedUrl(path, 3600); // 60 minutes = 3600 seconds
 
         if (error) {
-          console.error('Error creating signed URL:', error);
+          logger.error('Error creating signed URL', { error, recordingUrl });
           return NextResponse.json(
             { error: 'Failed to generate signed URL' },
             { status: 500 }
@@ -58,7 +59,7 @@ export async function GET(request: NextRequest) {
       expiresAt: null, // External URLs don't expire
     });
   } catch (error) {
-    console.error('Error generating signed URL:', error);
+    logger.error('Error generating signed URL', { error });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

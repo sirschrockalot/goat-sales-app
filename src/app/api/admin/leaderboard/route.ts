@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import logger from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,7 +17,7 @@ export async function GET(request: NextRequest) {
 
     if (viewError) {
       // Fallback to manual calculation if view doesn't exist
-      console.warn('leaderboard_view not available, using fallback:', viewError);
+      logger.warn('leaderboard_view not available, using fallback', { error: viewError });
       return await getLeaderboardFallback();
     }
 
@@ -80,7 +81,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ leaderboard });
   } catch (error) {
-    console.error('Error fetching leaderboard:', error);
+    logger.error('Error fetching leaderboard', { error });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

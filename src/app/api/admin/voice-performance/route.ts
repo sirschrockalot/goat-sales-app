@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getVoicePerformanceStats, getOptimalStability } from '@/lib/voicePerformance';
 import { getUserFromRequest } from '@/lib/getUserFromRequest';
 import { supabaseAdmin } from '@/lib/supabase';
+import logger from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -40,7 +41,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(stats);
   } catch (error) {
-    console.error('Error fetching voice performance stats:', error);
+    logger.error('Error fetching voice performance stats', { error });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -104,7 +105,7 @@ export async function POST(request: NextRequest) {
       optimalStability,
     });
   } catch (error) {
-    console.error('Error updating auto-optimize setting:', error);
+    logger.error('Error updating auto-optimize setting', { error });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import OpenAI from 'openai';
+import logger from '@/lib/logger';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest) {
       .eq('id', segmentId);
 
     if (updateError) {
-      console.error('Error updating script segment embedding:', updateError);
+      logger.error('Error updating script segment embedding', { error: updateError, segmentId });
       return NextResponse.json(
         { error: 'Failed to update embedding' },
         { status: 500 }
@@ -55,7 +56,7 @@ export async function POST(request: NextRequest) {
       embedding_length: embedding.length,
     });
   } catch (error) {
-    console.error('Error generating script segment embedding:', error);
+    logger.error('Error generating script segment embedding', { error });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

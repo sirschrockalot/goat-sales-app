@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { judgeCall } from '@/lib/judge';
 import { analyzeDeviation } from '@/lib/analyzeDeviation';
+import logger from '@/lib/logger';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
 
 export async function GET(
@@ -45,7 +46,7 @@ export async function GET(
       .single();
 
     if (error) {
-      console.error('Error fetching call:', error);
+      logger.error('Error fetching call', { error, callId });
       return NextResponse.json(
         { error: 'Call not found' },
         { status: 404 }
@@ -76,7 +77,7 @@ export async function GET(
         }
         // External URLs (e.g., Vapi) are returned as-is
       } catch (signedUrlError) {
-        console.error('Error generating signed URL:', signedUrlError);
+        logger.error('Error generating signed URL', { error: signedUrlError, callId });
         // Continue with original URL if signed URL generation fails
       }
     }
@@ -131,7 +132,7 @@ export async function GET(
           .eq('id', callId);
 
         if (updateError) {
-          console.error('Error updating call with grade:', updateError);
+          logger.error('Error updating call with grade', { error: updateError, callId });
         } else {
           // Update data object with new values
           data.goat_score = gradingResult.goatScore;
@@ -141,14 +142,14 @@ export async function GET(
           data.script_adherence = deviationAnalysis; // Store deviation analysis
         }
       } catch (gradingError) {
-        console.error('Error grading call:', gradingError);
+        logger.error('Error grading call', { error: gradingError, callId });
         // Continue with existing data even if grading fails
       }
     }
 
     return NextResponse.json(data);
   } catch (error) {
-    console.error('Error in GET /api/calls/[id]:', error);
+    logger.error('Error in GET /api/calls/[id]', { error, callId });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

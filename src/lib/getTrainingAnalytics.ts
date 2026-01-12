@@ -4,6 +4,7 @@
  */
 
 import { supabaseAdmin } from './supabase';
+import logger from './logger';
 
 export interface RepAnalytics {
   userId: string;
@@ -315,7 +316,7 @@ export async function getTrainingAnalytics(): Promise<TrainingAnalytics> {
       gateMastery,
     };
   } catch (error) {
-    console.error('Error getting training analytics:', error);
+    logger.error('Error getting training analytics', { error });
     throw error;
   }
 }

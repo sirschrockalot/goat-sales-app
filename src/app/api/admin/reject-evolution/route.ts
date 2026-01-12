@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getUserFromRequest } from '@/lib/getUserFromRequest';
+import logger from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
       .eq('id', evolutionId);
 
     if (updateError) {
-      console.error('Error rejecting evolution:', updateError);
+      logger.error('Error rejecting evolution', { error: updateError, evolutionId });
       return NextResponse.json(
         { error: 'Failed to reject evolution' },
         { status: 500 }
@@ -61,7 +62,7 @@ export async function POST(request: NextRequest) {
       evolutionId,
     });
   } catch (error) {
-    console.error('Error rejecting evolution:', error);
+    logger.error('Error rejecting evolution', { error });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

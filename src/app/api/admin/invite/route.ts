@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin, createSupabaseClient } from '@/lib/supabase';
+import logger from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
@@ -43,7 +44,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (profileError || !profile || !profile.is_admin) {
-      console.warn(`[SECURITY] Non-admin user ${user.id} attempted to invite user`);
+      logger.warn('Non-admin user attempted to invite user', { userId: user.id });
       return NextResponse.json(
         { error: 'Forbidden - Admin access required' },
         { status: 403 }
@@ -94,7 +95,7 @@ export async function POST(request: NextRequest) {
     );
 
     if (inviteError) {
-      console.error('Error inviting user:', inviteError);
+      logger.error('Error inviting user', { error: inviteError, email });
       return NextResponse.json(
         { error: 'Failed to send invitation', details: inviteError.message },
         { status: 500 }
@@ -102,7 +103,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Log successful invitation (for audit trail)
-    console.log(`[ADMIN] User ${user.id} (${user.email}) invited ${email}`);
+    logger.info('Admin invited user', { adminId: user.id, adminEmail: user.email, invitedEmail: email });
 
     return NextResponse.json({
       success: true,
@@ -111,7 +112,7 @@ export async function POST(request: NextRequest) {
       invitedAt: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('Error in POST /api/admin/invite:', error);
+    logger.error('Error in POST /api/admin/invite', { error });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

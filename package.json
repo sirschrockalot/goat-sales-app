@@ -40,7 +40,16 @@
     "vapi:cleanup": "tsx scripts/cleanup-vapi-assistants.ts --delete",
     "elevenlabs:voices": "tsx scripts/list-elevenlabs-voices.ts",
     "vapi:remove-unpublished": "tsx scripts/remove-unpublished-or-error-assistants.ts",
-    "vapi:remove-unpublished:delete": "tsx scripts/remove-unpublished-or-error-assistants.ts --delete --yes"
+    "vapi:remove-unpublished:delete": "tsx scripts/remove-unpublished-or-error-assistants.ts --delete --yes",
+    "apex:insights": "tsx scripts/apexInsights.ts",
+    "sandbox:generate-personas": "tsx scripts/personaGenerator.ts",
+    "sandbox:battle": "tsx scripts/autonomousBattle.ts",
+    "sandbox:promote-tactics": "tsx scripts/promoteTactics.ts",
+    "sandbox:adversarial": "tsx scripts/adversarialTrainer.ts",
+    "sandbox:golden-samples": "tsx scripts/goldenSamples.ts",
+    "sandbox:audit-vocal-soul": "tsx scripts/vocalSoulAuditor.ts",
+    "scout:start": "tsx scripts/startTacticalScout.ts",
+    "scout:scan": "tsx scripts/scanBreakthroughs.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.90.1",
@@ -63,6 +72,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "slugify": "^1.6.6",
+    "winston": "^3.19.0",
     "youtube-transcript": "^1.2.1"
   },
   "devDependencies": {
@@ -70,6 +80,7 @@
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/winston": "^2.4.4",
     "autoprefixer": "^10.4.0",
     "eslint": "^9.0.0",
     "eslint-config-next": "^15.1.0",

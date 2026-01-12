@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getUserFromRequest } from '@/lib/getUserFromRequest';
+import logger from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -80,7 +81,7 @@ export async function GET(request: NextRequest) {
       script_text: data.script_text,
     });
   } catch (error) {
-    console.error('Error fetching script text:', error);
+    logger.error('Error fetching script text', { error, gateNumber: gateNumberParam, mode });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

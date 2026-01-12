@@ -4,6 +4,7 @@
  */
 
 import { supabaseAdmin } from './supabase';
+import logger from './logger';
 
 const TARGET_CONTRACT_PRICE = 82700; // $82,700 - the target contract price
 
@@ -18,7 +19,7 @@ export async function analyzeVoicePerformance(
   finalOfferPrice: number | null
 ): Promise<void> {
   if (!supabaseAdmin) {
-    console.error('supabaseAdmin not initialized');
+    logger.error('supabaseAdmin not initialized');
     return;
   }
 
@@ -36,7 +37,7 @@ export async function analyzeVoicePerformance(
       .single();
 
     if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 = not found
-      console.error('Error fetching voice performance log:', fetchError);
+      logger.error('Error fetching voice performance log', { error: fetchError });
       return;
     }
 
@@ -67,7 +68,7 @@ export async function analyzeVoicePerformance(
         .eq('stability_setting', stabilityValue);
 
       if (updateError) {
-        console.error('Error updating voice performance log:', updateError);
+        logger.error('Error updating voice performance log', { error: updateError });
       }
     } else {
       // Insert new log
@@ -82,11 +83,11 @@ export async function analyzeVoicePerformance(
         });
 
       if (insertError) {
-        console.error('Error inserting voice performance log:', insertError);
+        logger.error('Error inserting voice performance log', { error: insertError });
       }
     }
   } catch (error) {
-    console.error('Error in analyzeVoicePerformance:', error);
+    logger.error('Error in analyzeVoicePerformance', { error });
   }
 }
 
@@ -96,7 +97,7 @@ export async function analyzeVoicePerformance(
  */
 export async function getOptimalStability(sampleSize: number = 100): Promise<number | null> {
   if (!supabaseAdmin) {
-    console.error('supabaseAdmin not initialized');
+    logger.error('supabaseAdmin not initialized');
     return null;
   }
 
@@ -111,7 +112,7 @@ export async function getOptimalStability(sampleSize: number = 100): Promise<num
       .limit(3);
 
     if (error) {
-      console.error('Error fetching optimal stability:', error);
+      logger.error('Error fetching optimal stability', { error });
       return null;
     }
 
@@ -129,7 +130,7 @@ export async function getOptimalStability(sampleSize: number = 100): Promise<num
     scoredLogs.sort((a, b) => b.score - a.score);
     return scoredLogs[0]?.stability || null;
   } catch (error) {
-    console.error('Error in getOptimalStability:', error);
+    logger.error('Error in getOptimalStability', { error });
     return null;
   }
 }
@@ -148,7 +149,7 @@ export async function getVoicePerformanceStats(): Promise<{
   optimalStability: number | null;
 }> {
   if (!supabaseAdmin) {
-    console.error('supabaseAdmin not initialized');
+    logger.error('supabaseAdmin not initialized');
     return { logs: [], optimalStability: null };
   }
 
@@ -159,7 +160,7 @@ export async function getVoicePerformanceStats(): Promise<{
       .order('stability_setting', { ascending: true });
 
     if (error) {
-      console.error('Error fetching voice performance stats:', error);
+      logger.error('Error fetching voice performance stats', { error });
       return { logs: [], optimalStability: null };
     }
 
@@ -170,7 +171,7 @@ export async function getVoicePerformanceStats(): Promise<{
       optimalStability,
     };
   } catch (error) {
-    console.error('Error in getVoicePerformanceStats:', error);
+    logger.error('Error in getVoicePerformanceStats', { error });
     return { logs: [], optimalStability: null };
   }
 }

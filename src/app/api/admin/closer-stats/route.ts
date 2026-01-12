@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getUserFromRequest } from '@/lib/getUserFromRequest';
+import logger from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -52,7 +53,7 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: false });
 
     if (callsError) {
-      console.error('Error fetching calls:', callsError);
+      logger.error('Error fetching calls', { error: callsError });
       return NextResponse.json(
         { error: 'Failed to fetch calls' },
         { status: 500 }
@@ -129,7 +130,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ stats });
   } catch (error) {
-    console.error('Error in closer stats API:', error);
+    logger.error('Error in closer stats API', { error });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

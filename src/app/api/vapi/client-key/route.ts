@@ -8,6 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import logger from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
       apiKey: vapiPublicKey,
     });
   } catch (error) {
-    console.error('Error getting Vapi client key:', error);
+    logger.error('Error getting Vapi client key', { error });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

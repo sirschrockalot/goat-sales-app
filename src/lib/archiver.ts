@@ -12,6 +12,7 @@
  */
 
 import { supabaseAdmin } from './supabase';
+import logger from './logger';
 
 // Protected tags that prevent archiving
 export const PROTECTED_TAGS = ['GOLDEN_KNOWLEDGE', 'PRIVATE_PORTAL', 'APEX_LOGIC'] as const;
@@ -78,7 +79,7 @@ function isProtected(record: any): { protected: boolean; reason: string } {
  */
 async function archiveCallRecord(call: any): Promise<boolean> {
   if (!supabaseAdmin) {
-    console.error('Supabase admin client not available');
+    logger.error('Supabase admin client not available');
     return false;
   }
 
@@ -113,7 +114,7 @@ async function archiveCallRecord(call: any): Promise<boolean> {
       });
 
     if (archiveError) {
-      console.error(`Error archiving call ${call.id}:`, archiveError);
+      logger.error('Error archiving call', { callId: call.id, error: archiveError });
       return false;
     }
 
@@ -124,14 +125,14 @@ async function archiveCallRecord(call: any): Promise<boolean> {
       .eq('id', call.id);
 
     if (deleteError) {
-      console.error(`Error deleting archived call ${call.id}:`, deleteError);
+      logger.error('Error deleting archived call', { callId: call.id, error: deleteError });
       // Archive was successful, but deletion failed - this is recoverable
       return true; // Still count as archived
     }
 
     return true;
   } catch (error) {
-    console.error(`Error archiving call ${call.id}:`, error);
+    logger.error('Error archiving call', { callId: call.id, error });
     return false;
   }
 }
@@ -158,7 +159,7 @@ async function getEligibleRecords(limit: number = ARCHIVE_CONFIG.batchSize): Pro
     .order('created_at', { ascending: true }); // Archive oldest first
 
   if (error) {
-    console.error('Error fetching eligible records:', error);
+    logger.error('Error fetching eligible records', { error });
     return [];
   }
 
@@ -169,7 +170,7 @@ async function getEligibleRecords(limit: number = ARCHIVE_CONFIG.batchSize): Pro
  * Run the archiving process
  */
 export async function runArchivingProcess(): Promise<ArchiveStats> {
-  console.log('🗄️  Starting Smart Archiving Process...\n');
+  logger.info('Starting Smart Archiving Process');
 
   const stats: ArchiveStats = {
     totalProcessed: 0,
@@ -187,18 +188,18 @@ export async function runArchivingProcess(): Promise<ArchiveStats> {
 
   while (hasMore) {
     batchNumber++;
-    console.log(`📦 Processing batch ${batchNumber}...`);
+    logger.info(`Processing archiving batch ${batchNumber}`);
 
     // Get eligible records
     const eligibleRecords = await getEligibleRecords(ARCHIVE_CONFIG.batchSize);
 
     if (eligibleRecords.length === 0) {
       hasMore = false;
-      console.log('✅ No more records to process');
+      logger.info('No more records to process');
       break;
     }
 
-    console.log(`   Found ${eligibleRecords.length} eligible records`);
+    logger.debug(`Found ${eligibleRecords.length} eligible records for archiving`);
 
     // Process each record
     for (const record of eligibleRecords) {
@@ -216,7 +217,7 @@ export async function runArchivingProcess(): Promise<ArchiveStats> {
           stats.protectedReasons.hasProtectedTag++;
         }
 
-        console.log(`   🛡️  Protected: ${record.id} (${protection.reason})`);
+        logger.debug(`Protected record from archiving`, { callId: record.id, reason: protection.reason });
         continue;
       }
 
@@ -225,10 +226,10 @@ export async function runArchivingProcess(): Promise<ArchiveStats> {
 
       if (archived) {
         stats.archived++;
-        console.log(`   ✅ Archived: ${record.id}`);
+        logger.info(`Archived call record`, { callId: record.id });
       } else {
         stats.errors++;
-        console.log(`   ❌ Error archiving: ${record.id}`);
+        logger.error(`Error archiving record`, { callId: record.id });
       }
     }
 
@@ -243,13 +244,14 @@ export async function runArchivingProcess(): Promise<ArchiveStats> {
     }
   }
 
-  console.log('\n📊 Archiving Statistics:');
-  console.log(`   Total Processed: ${stats.totalProcessed}`);
-  console.log(`   Protected: ${stats.protected}`);
-  console.log(`   Archived: ${stats.archived}`);
-  console.log(`   Errors: ${stats.errors}`);
-  console.log(`   Protected by Tag: ${stats.protectedReasons.hasProtectedTag}`);
-  console.log(`   Protected by Flag: ${stats.protectedReasons.isPermanentKnowledge}`);
+  logger.info('Archiving Statistics', {
+    totalProcessed: stats.totalProcessed,
+    protected: stats.protected,
+    archived: stats.archived,
+    errors: stats.errors,
+    protectedByTag: stats.protectedReasons.hasProtectedTag,
+    protectedByFlag: stats.protectedReasons.isPermanentKnowledge,
+  });
 
   return stats;
 }
@@ -274,7 +276,7 @@ export async function tagAsProtected(
       .single();
 
     if (fetchError || !call) {
-      console.error(`Error fetching call ${callId}:`, fetchError);
+      logger.error('Error fetching call for tagging', { callId, error: fetchError });
       return false;
     }
 
@@ -298,14 +300,14 @@ export async function tagAsProtected(
       .eq('id', callId);
 
     if (updateError) {
-      console.error(`Error tagging call ${callId}:`, updateError);
+      logger.error('Error tagging call', { callId, error: updateError });
       return false;
     }
 
-    console.log(`✅ Tagged call ${callId} with ${tag}`);
+    logger.info(`Tagged call with protected tag`, { callId, tag });
     return true;
   } catch (error) {
-    console.error(`Error tagging call ${callId}:`, error);
+    logger.error('Error tagging call', { callId, error });
     return false;
   }
 }
@@ -325,14 +327,14 @@ export async function setPermanentKnowledge(callId: string, isPermanent: boolean
       .eq('id', callId);
 
     if (error) {
-      console.error(`Error setting permanent knowledge flag for ${callId}:`, error);
+      logger.error('Error setting permanent knowledge flag', { callId, error });
       return false;
     }
 
-    console.log(`✅ Set is_permanent_knowledge=${isPermanent} for call ${callId}`);
+    logger.info(`Set is_permanent_knowledge flag`, { callId, isPermanent });
     return true;
   } catch (error) {
-    console.error(`Error setting permanent knowledge flag:`, error);
+    logger.error('Error setting permanent knowledge flag', { error });
     return false;
   }
 }
@@ -396,7 +398,7 @@ export async function getArchiveStats(): Promise<{
       oldestUnprotectedCall,
     };
   } catch (error) {
-    console.error('Error getting archive stats:', error);
+    logger.error('Error getting archive stats', { error });
     return {
       totalCalls: 0,
       archivedCalls: 0,

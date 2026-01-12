@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin, createSupabaseClient } from '@/lib/supabase';
+import logger from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
@@ -74,7 +75,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
-      console.error('Error sharing rebuttal:', error);
+      logger.error('Error sharing rebuttal', { error, userId });
       return NextResponse.json(
         { error: 'Failed to share rebuttal' },
         { status: 500 }
@@ -87,7 +88,7 @@ export async function POST(request: NextRequest) {
       message: 'Rebuttal shared to community library',
     });
   } catch (error) {
-    console.error('Error in POST /api/rebuttals/share:', error);
+    logger.error('Error in POST /api/rebuttals/share', { error });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

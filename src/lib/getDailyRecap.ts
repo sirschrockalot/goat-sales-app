@@ -4,6 +4,7 @@
  */
 
 import { supabaseAdmin } from '@/lib/supabase';
+import logger from '@/lib/logger';
 
 export interface RepPerformance {
   userId: string;
@@ -66,7 +67,7 @@ export async function getDailyRecap(): Promise<DailyRecapData> {
     .not('goat_score', 'is', null);
 
   if (todayError) {
-    console.error('Error fetching today\'s calls:', todayError);
+    logger.error('Error fetching today\'s calls', { error: todayError });
     throw new Error('Failed to fetch today\'s calls');
   }
 
@@ -83,7 +84,7 @@ export async function getDailyRecap(): Promise<DailyRecapData> {
     .not('goat_score', 'is', null);
 
   if (yesterdayError) {
-    console.error('Error fetching yesterday\'s calls:', yesterdayError);
+    logger.error('Error fetching yesterday\'s calls', { error: yesterdayError });
   }
 
   // Calculate team averages

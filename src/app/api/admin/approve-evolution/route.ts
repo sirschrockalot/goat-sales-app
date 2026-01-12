@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getUserFromRequest } from '@/lib/getUserFromRequest';
 import { updateVapiAssistantPrompt } from '@/lib/vapiControl';
+import logger from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
@@ -84,7 +85,7 @@ export async function POST(request: NextRequest) {
       .eq('id', evolutionId);
 
     if (updateError) {
-      console.error('Error updating evolution status:', updateError);
+      logger.error('Error updating evolution status', { error: updateError, evolutionId });
       return NextResponse.json(
         { error: 'Failed to update evolution status' },
         { status: 500 }
@@ -95,7 +96,7 @@ export async function POST(request: NextRequest) {
     try {
       await updateVapiAssistantPrompt(evolution.assistant_id, promptToApply);
     } catch (vapiError) {
-      console.error('Error updating Vapi assistant:', vapiError);
+      logger.error('Error updating Vapi assistant', { error: vapiError, assistantId: evolution.assistant_id, evolutionId });
       // Rollback the status update
       await supabaseAdmin
         .from('prompt_versions')
@@ -114,7 +115,7 @@ export async function POST(request: NextRequest) {
       evolutionId,
     });
   } catch (error) {
-    console.error('Error approving evolution:', error);
+    logger.error('Error approving evolution', { error });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

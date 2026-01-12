@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import logger from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -56,7 +57,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ trends });
   } catch (error) {
-    console.error('Error fetching objection trends:', error);
+    logger.error('Error fetching objection trends', { error });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

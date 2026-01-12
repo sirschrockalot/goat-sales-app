@@ -5,6 +5,7 @@
 
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import logger from '@/lib/logger';
 
 export async function GET() {
   try {
@@ -17,7 +18,7 @@ export async function GET() {
       .limit(5);
 
     if (error) {
-      console.error('Error fetching top rebuttals:', error);
+      logger.error('Error fetching top rebuttals', { error });
       return NextResponse.json(
         { error: 'Failed to fetch rebuttals' },
         { status: 500 }
@@ -26,7 +27,7 @@ export async function GET() {
 
     return NextResponse.json(data || []);
   } catch (error) {
-    console.error('Error in GET /api/rebuttals/top:', error);
+    logger.error('Error in GET /api/rebuttals/top', { error });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

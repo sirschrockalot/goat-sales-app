@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getUserFromRequest } from '@/lib/getUserFromRequest';
+import logger from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
@@ -70,7 +71,7 @@ export async function POST(request: NextRequest) {
 
     if (!assistantResponse.ok) {
       const errorText = await assistantResponse.text();
-      console.error('Error fetching assistant from Vapi:', errorText);
+      logger.error('Error fetching assistant from Vapi', { error: errorText, assistantId });
       return NextResponse.json(
         { error: 'Failed to fetch assistant from Vapi' },
         { status: 500 }
@@ -108,7 +109,7 @@ export async function POST(request: NextRequest) {
 
     if (!updateResponse.ok) {
       const errorText = await updateResponse.text();
-      console.error('Error updating assistant:', errorText);
+      logger.error('Error updating assistant', { error: errorText, assistantId, optimizationId });
       return NextResponse.json(
         { error: 'Failed to update assistant in Vapi' },
         { status: 500 }
@@ -125,7 +126,7 @@ export async function POST(request: NextRequest) {
       .eq('id', optimizationId);
 
     if (updateError) {
-      console.error('Error marking optimization as applied:', updateError);
+      logger.error('Error marking optimization as applied', { error: updateError, optimizationId });
       // Don't fail the request - the assistant was updated successfully
     }
 
@@ -136,7 +137,7 @@ export async function POST(request: NextRequest) {
       assistantId,
     });
   } catch (error) {
-    console.error('Error applying optimization:', error);
+    logger.error('Error applying optimization', { error });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

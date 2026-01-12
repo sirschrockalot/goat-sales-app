@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin, createSupabaseClient } from '@/lib/supabase';
+import logger from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
       .order('unlocked_at', { ascending: false });
 
     if (error) {
-      console.error('Error fetching badges:', error);
+      logger.error('Error fetching badges', { error, userId });
       return NextResponse.json(
         { error: 'Failed to fetch badges' },
         { status: 500 }
@@ -40,7 +41,7 @@ export async function GET(request: NextRequest) {
       badges: badges || [],
     });
   } catch (error) {
-    console.error('Error in GET /api/badges:', error);
+    logger.error('Error in GET /api/badges', { error });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -103,7 +104,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
-      console.error('Error creating badge:', error);
+      logger.error('Error creating badge', { error, userId });
       return NextResponse.json(
         { error: 'Failed to create badge' },
         { status: 500 }
@@ -115,7 +116,7 @@ export async function POST(request: NextRequest) {
       badge,
     });
   } catch (error) {
-    console.error('Error in POST /api/badges:', error);
+    logger.error('Error in POST /api/badges', { error });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

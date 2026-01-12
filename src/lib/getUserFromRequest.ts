@@ -9,6 +9,7 @@
 
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import logger from './logger';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -73,8 +74,7 @@ export async function getUserFromRequest(request: NextRequest) {
     if (process.env.NODE_ENV === 'development') {
       const allCookies = request.headers.get('cookie') || '';
       const cookieNames = allCookies.split(';').map(c => c.trim().split('=')[0]).filter(Boolean);
-      console.log('[getUserFromRequest] Available cookies:', cookieNames);
-      console.log('[getUserFromRequest] Looking for cookie:', cookieName, 'or', cookieNameAlt);
+      logger.debug('Available cookies for getUserFromRequest', { cookieNames, cookieName, cookieNameAlt });
     }
     return { user: null, error: new Error('No access token found in cookies or headers') };
   }

@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin, createSupabaseClient } from '@/lib/supabase';
+import logger from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,7 +29,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (profileError || !profile || !profile.is_admin) {
-      console.warn(`[SECURITY] Non-admin user ${user.id} attempted to revoke user access`);
+      logger.warn('Non-admin user attempted to revoke user access', { userId: user.id });
       return NextResponse.json(
         { error: 'Forbidden - Admin access required' },
         { status: 403 }
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
 
     // SAFETY CHECK: Prevent admin from deleting their own account
     if (userId === user.id) {
-      console.warn(`[SECURITY] Admin ${user.id} attempted to delete their own account`);
+      logger.warn('Admin attempted to delete their own account', { adminId: user.id });
       return NextResponse.json(
         { error: 'Cannot revoke your own access' },
         { status: 403 }
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
     const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
 
     if (deleteError) {
-      console.error('Error deleting user:', deleteError);
+      logger.error('Error deleting user', { error: deleteError, userId });
       return NextResponse.json(
         { error: 'Failed to revoke user access', details: deleteError.message },
         { status: 500 }
@@ -68,7 +69,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Log successful deletion (for audit trail)
-    console.log(`[ADMIN] User ${user.id} (${user.email}) revoked access for user ${userId}`);
+    logger.info('Admin revoked user access', { adminId: user.id, adminEmail: user.email, revokedUserId: userId });
 
     return NextResponse.json({
       success: true,
@@ -76,7 +77,7 @@ export async function POST(request: NextRequest) {
       userId: userId,
     });
   } catch (error) {
-    console.error('Error in POST /api/admin/revoke-user:', error);
+    logger.error('Error in POST /api/admin/revoke-user', { error });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

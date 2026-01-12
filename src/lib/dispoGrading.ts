@@ -4,6 +4,7 @@
  */
 
 import OpenAI from 'openai';
+import logger from './logger';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -87,7 +88,7 @@ export async function gradeDispoCall(transcript: string): Promise<DispoGradingRe
       },
     };
   } catch (error) {
-    console.error('Error grading Dispo call:', error);
+    logger.error('Error grading Dispo call', { error });
     // Return default grading on error
     return {
       goatScore: 0,

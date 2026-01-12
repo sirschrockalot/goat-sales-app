@@ -1,16 +1,11 @@
 /**
  * Vapi.ai Client Integration
  * Handles real-time voice conversations for sales training
- * 
- * Note: This implementation uses a generic Vapi SDK interface.
- * You may need to adjust the API calls based on the actual @vapi-ai/web SDK.
- * Check Vapi.ai documentation for the latest SDK API.
  */
 
-// TODO: Verify the actual @vapi-ai/web SDK API and adjust imports/usage accordingly
-// The SDK might use different class names, methods, or event patterns
 import Vapi from '@vapi-ai/web';
 import { getAmbientNoiseConfig } from '@/lib/vapiConfig';
+import logger from '@/lib/logger';
 
 export type PersonaMode = 'acquisition' | 'disposition';
 
@@ -102,7 +97,7 @@ export class VapiClient {
 
     // Listen for messages (transcripts come via message events)
     this.vapi.on('message', (message: any) => {
-      console.log('📨 Vapi message event:', message);
+      logger.debug('Vapi message event', { messageType: message.type });
       
       // Check if this is a transcript message
       if (message.type === 'transcript' || message.transcript || message.content) {
@@ -123,14 +118,17 @@ export class VapiClient {
           timestamp: Date.now(),
         };
 
-        console.log('📝 Transcription event created:', { role, transcript: event.transcript.substring(0, 50) + '...' });
+        logger.debug('Transcription event created', { 
+          role, 
+          transcriptPreview: event.transcript.substring(0, 50) + '...' 
+        });
         this.transcriptionCallbacks.forEach((callback) => callback(event));
       }
     });
 
     // Listen for transcript events specifically (Vapi SDK may emit these separately)
     this.vapi.on('transcript', (transcript: any) => {
-      console.log('📝 Vapi transcript event:', transcript);
+      logger.debug('Vapi transcript event', { transcript });
       
       if (transcript) {
         const event: TranscriptionEvent = {
@@ -140,27 +138,30 @@ export class VapiClient {
           timestamp: Date.now(),
         };
 
-        console.log('📝 Transcription event from transcript event:', { role: event.role, transcript: event.transcript.substring(0, 50) + '...' });
+        logger.debug('Transcription event from transcript event', { 
+          role: event.role, 
+          transcriptPreview: event.transcript.substring(0, 50) + '...' 
+        });
         this.transcriptionCallbacks.forEach((callback) => callback(event));
       }
     });
 
     // Listen for user speech events (if available)
     this.vapi.on('user-speech-start', (data: any) => {
-      console.log('🎤 User speech started:', data);
+      logger.debug('User speech started', { data });
     });
 
     this.vapi.on('user-speech-end', (data: any) => {
-      console.log('🎤 User speech ended:', data);
+      logger.debug('User speech ended', { data });
     });
 
     // Listen for assistant speech events
     this.vapi.on('assistant-speech-start', (data: any) => {
-      console.log('🤖 Assistant speech started:', data);
+      logger.debug('Assistant speech started', { data });
     });
 
     this.vapi.on('assistant-speech-end', (data: any) => {
-      console.log('🤖 Assistant speech ended:', data);
+      logger.debug('Assistant speech ended', { data });
     });
 
     // Debug: Log all events to help identify transcription events
@@ -191,7 +192,7 @@ export class VapiClient {
         try {
           this.vapi?.on(eventName as any, (data: any) => {
             if (eventName.includes('transcript') || eventName.includes('message') || eventName.includes('speech')) {
-              console.log(`🔍 [DEBUG] Vapi event "${eventName}":`, data);
+              logger.debug(`Vapi event: ${eventName}`, { data });
             }
           });
         } catch (e) {
@@ -212,7 +213,7 @@ export class VapiClient {
 
     // Listen for call end
     this.vapi.on('call-end', (data?: any) => {
-      console.log('Call ended:', data);
+      logger.info('Call ended', { data });
       this.currentStatus = {
         ...this.currentStatus,
         isActive: false,
@@ -223,10 +224,10 @@ export class VapiClient {
 
     // Listen for status updates (includes ejection errors)
     this.vapi.on('status', (status: any) => {
-      console.log('Vapi status update:', status);
+      logger.debug('Vapi status update', { status });
       // Handle "ejection" or "meeting ended" errors
       if (status?.message?.includes('ejection') || status?.message?.includes('Meeting has ended')) {
-        console.error('Call was ejected/ended:', status);
+        logger.error('Call was ejected/ended', { status });
         this.currentStatus = {
           ...this.currentStatus,
           isActive: false,
@@ -254,7 +255,7 @@ export class VapiClient {
         stack: error?.stack,
       };
       
-      console.error('🚨 Vapi error event triggered:', errorDetails);
+      logger.error('Vapi error event triggered', { errorDetails });
       
       // Check for specific error messages in multiple places
       const errorMessage = 
@@ -269,14 +270,14 @@ export class VapiClient {
       if (lowerMessage.includes('ejection') || 
           lowerMessage.includes('meeting has ended') ||
           lowerMessage.includes('meeting ended')) {
-        console.error('🚨🚨🚨 CALL EJECTION DETECTED 🚨🚨🚨', {
+        logger.error('CALL EJECTION DETECTED', {
           errorDetails,
           possibleCauses: [
-            '1. Assistant not published/available - Check Vapi Dashboard',
-            '2. Voice configuration issue - Voice ID may not be accessible',
-            '3. Timing issue - Assistant was just created and needs more time',
-            '4. Network/connection issue - Check internet connection',
-            '5. Vapi service issue - Check Vapi status page',
+            'Assistant not published/available - Check Vapi Dashboard',
+            'Voice configuration issue - Voice ID may not be accessible',
+            'Timing issue - Assistant was just created and needs more time',
+            'Network/connection issue - Check internet connection',
+            'Vapi service issue - Check Vapi status page',
           ],
           troubleshooting: [
             'Wait 5-10 seconds after assistant creation',
@@ -307,11 +308,11 @@ export class VapiClient {
       // Verify microphone access before starting call
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        console.log('✅ Microphone access confirmed');
+        logger.debug('Microphone access confirmed');
         // Stop the test stream - we just needed to verify access
         stream.getTracks().forEach(track => track.stop());
       } catch (micError) {
-        console.error('❌ Microphone access denied or unavailable:', micError);
+        logger.error('Microphone access denied or unavailable', { error: micError });
         throw new Error('Microphone access is required. Please allow microphone access and try again.');
       }
 
@@ -327,19 +328,23 @@ export class VapiClient {
         throw new Error('Assistant ID is required to start a call. Please provide an assistantId when initializing the Vapi client.');
       }
       
-      console.log('📞 Starting call with assistant:', this.config.assistantId);
+      logger.info('Starting call with assistant', { assistantId: this.config.assistantId });
       const call = await this.vapi.start(this.config.assistantId);
       
       // Call started successfully - status will be updated by call-start event
       if (call) {
-        console.log('✅ Call started successfully:', call);
-        
-        // Extract callId and controlUrl from the call object if available
         const callId = (call as any).id || (call as any).callId;
         const controlUrl = (call as any).controlUrl;
         
+        // Set context for logging
+        if (callId) {
+          logger.setContext({ callId });
+        }
+        
+        logger.info('Call started successfully', { callId, controlUrl });
+        
+        // Extract callId and controlUrl from the call object if available
         if (callId || controlUrl) {
-          console.log('📋 Call info:', { callId, controlUrl });
           this.callInfoCallbacks.forEach((callback) => 
             callback({ callId: callId || '', controlUrl: controlUrl || '' })
           );
@@ -349,17 +354,17 @@ export class VapiClient {
         if (this.vapi && typeof (this.vapi as any).isMuted === 'function') {
           const isMuted = (this.vapi as any).isMuted();
           if (isMuted) {
-            console.warn('⚠️ WARNING: Microphone appears to be muted. User speech may not be transcribed.');
+            logger.warn('Microphone appears to be muted - user speech may not be transcribed');
             // Try to unmute
             if (typeof (this.vapi as any).setMuted === 'function') {
               (this.vapi as any).setMuted(false);
-              console.log('🔊 Attempted to unmute microphone');
+              logger.debug('Attempted to unmute microphone');
             }
           }
         }
       }
     } catch (error) {
-      console.error('❌ Error starting call:', error);
+      logger.error('Error starting call', { error });
       this.currentStatus = {
         ...this.currentStatus,
         status: 'error',
@@ -384,7 +389,7 @@ export class VapiClient {
       };
       this.notifyStatusChange();
     } catch (error) {
-      console.error('Error ending call:', error);
+      logger.error('Error ending call', { error });
     }
   }
 
@@ -403,7 +408,7 @@ export class VapiClient {
       };
       this.notifyStatusChange();
     } catch (error) {
-      console.error('Error toggling mute:', error);
+      logger.error('Error toggling mute', { error });
     }
   }
 
@@ -474,7 +479,7 @@ export class VapiClient {
    */
   sendMessage(message: string): void {
     if (!this.vapi) {
-      console.warn('Vapi client not initialized. Cannot send message.');
+      logger.warn('Vapi client not initialized - cannot send message');
       return;
     }
 
@@ -483,7 +488,7 @@ export class VapiClient {
       // This is the correct way to send voice hints/control messages
       this.vapi.say(message, false, true, true); // message, endCallAfterSpoken, interruptionsEnabled, interruptAssistantEnabled
     } catch (error) {
-      console.error('Error sending message:', error);
+      logger.error('Error sending message', { error });
       throw error;
     }
   }
@@ -497,7 +502,9 @@ export class VapiClient {
    */
   destroy(): void {
     if (this.vapi) {
-      this.vapi.stop().catch(console.error);
+      this.vapi.stop().catch((error) => {
+        logger.error('Error stopping Vapi stream', { error });
+      });
     }
     this.transcriptionCallbacks = [];
     this.statusCallbacks = [];

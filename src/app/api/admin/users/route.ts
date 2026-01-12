@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin, createSupabaseClient } from '@/lib/supabase';
+import logger from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -28,7 +29,7 @@ export async function GET(request: NextRequest) {
       .single();
 
     if (profileError || !profile || !profile.is_admin) {
-      console.warn(`[SECURITY] Non-admin user ${user.id} attempted to access user management`);
+      logger.warn('Non-admin user attempted to access user management', { userId: user.id });
       return NextResponse.json(
         { error: 'Forbidden - Admin access required' },
         { status: 403 }
@@ -40,7 +41,7 @@ export async function GET(request: NextRequest) {
     const { data: authUsersData, error: authUsersError } = await supabaseAdmin.auth.admin.listUsers();
 
     if (authUsersError) {
-      console.error('Error fetching auth users:', authUsersError);
+      logger.error('Error fetching auth users', { error: authUsersError });
       return NextResponse.json(
         { error: 'Failed to fetch users' },
         { status: 500 }
@@ -56,7 +57,7 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: false });
 
     if (profilesError) {
-      console.error('Error fetching profiles:', profilesError);
+      logger.error('Error fetching profiles', { error: profilesError });
       return NextResponse.json(
         { error: 'Failed to fetch profiles' },
         { status: 500 }
@@ -118,7 +119,7 @@ export async function GET(request: NextRequest) {
       activeUsers,
     });
   } catch (error) {
-    console.error('Error in GET /api/admin/users:', error);
+    logger.error('Error in GET /api/admin/users', { error });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

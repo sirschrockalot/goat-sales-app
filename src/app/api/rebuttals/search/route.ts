@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import OpenAI from 'openai';
+import logger from '@/lib/logger';
 
 // Use Edge Runtime for lowest latency
 export const runtime = 'edge';
@@ -55,7 +56,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (error) {
-      console.error('Error calling match_rebuttals:', error);
+      logger.error('Error calling match_rebuttals', { error, query });
       
       // Fallback: Try text-based search if RPC fails
       const { data: fallbackData, error: fallbackError } = await supabaseAdmin
@@ -93,7 +94,7 @@ export async function POST(request: NextRequest) {
       query: query.substring(0, 100), // Return truncated query for reference
     });
   } catch (error) {
-    console.error('Error in POST /api/rebuttals/search:', error);
+    logger.error('Error in POST /api/rebuttals/search', { error });
     return NextResponse.json(
       {
         error: 'Internal server error',

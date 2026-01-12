@@ -173,7 +173,7 @@ export async function getElevenLabsBalance(): Promise<CreditStatus> {
       status,
     };
   } catch (error) {
-    console.error('Error fetching ElevenLabs balance:', error);
+    logger.error('Error fetching ElevenLabs balance', { error });
     return {
       provider: 'elevenlabs',
       balance: 0,
@@ -236,7 +236,7 @@ export async function getTwilioBalance(): Promise<CreditStatus> {
       status,
     };
   } catch (error) {
-    console.error('Error fetching Twilio balance:', error);
+    logger.error('Error fetching Twilio balance', { error });
     return {
       provider: 'twilio',
       balance: 0,
@@ -279,7 +279,7 @@ export async function getVapiUsage(): Promise<{
 
     if (!response.ok) {
       // If usage endpoint doesn't exist, estimate from call logs
-      console.warn('Vapi usage API not available, estimating from call logs');
+      logger.warn('Vapi usage API not available, estimating from call logs');
       return await estimateVapiUsageFromLogs(startOfMonth, endOfMonth);
     }
 
@@ -293,7 +293,7 @@ export async function getVapiUsage(): Promise<{
       callCount: data.callCount || 0,
     };
   } catch (error) {
-    console.error('Error fetching Vapi usage:', error);
+    logger.error('Error fetching Vapi usage', { error });
     // Fallback to estimating from call logs
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -652,7 +652,7 @@ async function sendBudgetWarning(dailySpend: number): Promise<boolean> {
       });
       return true;
     } catch (error) {
-      console.error('Error sending Slack notification:', error);
+      logger.error('Error sending Slack notification', { error });
     }
   }
 
@@ -674,11 +674,11 @@ async function sendBudgetWarning(dailySpend: number): Promise<boolean> {
       });
       return true;
     } catch (error) {
-      console.error('Error sending email notification:', error);
+      logger.error('Error sending email notification', { error });
     }
   }
 
-  console.warn('No notification method configured. Budget warning not sent.');
+  logger.warn('No notification method configured - budget warning not sent');
   return false;
 }
 
@@ -689,7 +689,7 @@ async function deactivateAllAssistants(): Promise<boolean> {
   const vapiSecretKey = process.env.VAPI_SECRET_KEY;
 
   if (!vapiSecretKey) {
-    console.error('VAPI_SECRET_KEY not configured. Cannot deactivate assistants.');
+    logger.error('VAPI_SECRET_KEY not configured - cannot deactivate assistants');
     return false;
   }
 
@@ -725,14 +725,14 @@ async function deactivateAllAssistants(): Promise<boolean> {
         });
         deactivatedCount++;
       } catch (error) {
-        console.error(`Error deactivating assistant ${assistant.id}:`, error);
+        logger.error('Error deactivating assistant', { assistantId: assistant.id, error });
       }
     }
 
-    console.log(`Deactivated ${deactivatedCount} assistants due to budget kill switch.`);
+    logger.warn(`Deactivated ${deactivatedCount} assistants due to budget kill switch`);
     return deactivatedCount > 0;
   } catch (error) {
-    console.error('Error deactivating assistants:', error);
+    logger.error('Error deactivating assistants', { error });
     return false;
   }
 }
@@ -809,7 +809,7 @@ export async function getSupabaseUsage(): Promise<SupabaseUsage> {
       period: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
     };
   } catch (error) {
-    console.error('Error fetching Supabase usage:', error);
+    logger.error('Error fetching Supabase usage', { error });
     return {
       dbSizeGB: 0,
       egressGB: 0,
@@ -864,7 +864,7 @@ export async function getVercelUsage(): Promise<VercelUsage> {
 
     if (!response.ok) {
       // If API fails, estimate from webhook traffic
-      console.warn('Vercel API not available, estimating from call logs');
+      logger.warn('Vercel API not available, estimating from call logs');
       return await estimateVercelUsageFromLogs();
     }
 
@@ -899,7 +899,7 @@ export async function getVercelUsage(): Promise<VercelUsage> {
       period: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
     };
   } catch (error) {
-    console.error('Error fetching Vercel usage:', error);
+    logger.error('Error fetching Vercel usage', { error });
     // Fallback to estimation
     return await estimateVercelUsageFromLogs();
   }
@@ -1012,7 +1012,7 @@ async function sendVercelAnomalyAlert(
   const slackWebhook = process.env.SLACK_WEBHOOK_URL;
 
   if (!slackWebhook) {
-    console.warn('SLACK_WEBHOOK_URL not configured. Cannot send Vercel anomaly alert.');
+    logger.warn('SLACK_WEBHOOK_URL not configured - cannot send Vercel anomaly alert');
     return false;
   }
 
@@ -1042,7 +1042,7 @@ async function sendVercelAnomalyAlert(
     });
     return true;
   } catch (error) {
-    console.error('Error sending Vercel anomaly alert:', error);
+    logger.error('Error sending Vercel anomaly alert', { error });
     return false;
   }
 }

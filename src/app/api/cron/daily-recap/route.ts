@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDailyRecap } from '@/lib/getDailyRecap';
 import { supabaseAdmin } from '@/lib/supabase';
 import { generateManagerRecapHTML } from '@/components/emails/ManagerRecapHTML';
+import logger from '@/lib/logger';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest) {
     const cronSecret = process.env.CRON_SECRET;
 
     if (!cronSecret) {
-      console.error('CRON_SECRET not configured');
+      logger.error('CRON_SECRET not configured');
       return NextResponse.json(
         { error: 'Cron secret not configured' },
         { status: 500 }
@@ -43,7 +44,7 @@ export async function GET(request: NextRequest) {
       .limit(10);
 
     if (adminError || !admins || admins.length === 0) {
-      console.error('Error fetching admin emails:', adminError);
+      logger.error('Error fetching admin emails', { error: adminError });
       return NextResponse.json(
         { error: 'No admin emails found', recapData },
         { status: 500 }
@@ -110,13 +111,12 @@ export async function GET(request: NextRequest) {
           },
         });
       } catch (emailError) {
-        console.error('Error sending email via Resend:', emailError);
+        logger.error('Error sending email via Resend', { error: emailError });
         // Fall through to return recap data even if email fails
       }
     } else {
       // If Resend is not configured, log the email HTML for manual sending
-      console.log('RESEND_API_KEY not configured. Email HTML generated but not sent.');
-      console.log('To configure: Add RESEND_API_KEY to environment variables');
+      logger.warn('RESEND_API_KEY not configured - email HTML generated but not sent');
     }
 
     // Return recap data even if email sending fails
@@ -131,7 +131,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Error in daily recap cron:', error);
+    logger.error('Error in daily recap cron', { error });
     return NextResponse.json(
       {
         error: 'Internal server error',

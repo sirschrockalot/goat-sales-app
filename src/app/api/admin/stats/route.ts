@@ -5,11 +5,27 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { getUserFromRequest } from '@/lib/getUserFromRequest';
+import logger from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
-    // TODO: Add authentication check for admin role
-    // For now, this is a basic implementation
+    // Check admin access
+    const { user, error: authError } = await getUserFromRequest(request);
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Verify user is admin
+    const { data: profile, error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .select('is_admin')
+      .eq('id', user.id)
+      .single();
+
+    if (profileError || !profile?.is_admin) {
+      return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
+    }
 
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -79,7 +95,7 @@ export async function GET(request: NextRequest) {
       totalClinches: totalClinches || 0,
     });
   } catch (error) {
-    console.error('Error fetching admin stats:', error);
+    logger.error('Error fetching admin stats', { error });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

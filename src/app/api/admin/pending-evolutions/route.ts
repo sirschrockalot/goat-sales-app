@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getUserFromRequest } from '@/lib/getUserFromRequest';
 import { getPendingEvolutions, getVersionHistory } from '@/lib/getPendingEvolutions';
+import logger from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
     const pending = await getPendingEvolutions();
     return NextResponse.json({ evolutions: pending });
   } catch (error) {
-    console.error('Error in pending evolutions API:', error);
+    logger.error('Error in pending evolutions API', { error });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

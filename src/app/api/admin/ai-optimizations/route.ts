@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getUserFromRequest } from '@/lib/getUserFromRequest';
+import logger from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -54,7 +55,7 @@ export async function GET(request: NextRequest) {
     const { data, error } = await query;
 
     if (error) {
-      console.error('Error fetching AI optimizations:', error);
+      logger.error('Error fetching AI optimizations', { error });
       return NextResponse.json(
         { error: 'Failed to fetch optimizations' },
         { status: 500 }
@@ -63,7 +64,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ optimizations: data || [] });
   } catch (error) {
-    console.error('Error in AI optimizations API:', error);
+    logger.error('Error in AI optimizations API', { error });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

@@ -6,12 +6,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getUserFromRequest } from '@/lib/getUserFromRequest';
+import logger from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
     // Check if supabaseAdmin is available
     if (!supabaseAdmin) {
-      console.error('supabaseAdmin not initialized - missing SUPABASE_SERVICE_ROLE_KEY');
+      logger.error('supabaseAdmin not initialized - missing SUPABASE_SERVICE_ROLE_KEY');
       return NextResponse.json(
         { error: 'Server configuration error' },
         { status: 500 }
@@ -112,7 +113,7 @@ export async function GET(request: NextRequest) {
       gauntlet_progress: profile.gauntlet_progress || {},
     });
   } catch (error) {
-    console.error('Error fetching user profile:', error);
+    logger.error('Error fetching user profile', { error });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin, createSupabaseClient } from '@/lib/supabase';
 import { getGauntletLevel } from '@/lib/gauntletLevels';
+import logger from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
@@ -119,7 +120,7 @@ export async function POST(request: NextRequest) {
       .eq('id', userId);
 
     if (updateError) {
-      console.error('Error updating gauntlet progress:', updateError);
+      logger.error('Error updating gauntlet progress', { error: updateError, userId });
       return NextResponse.json(
         { error: 'Failed to update progress' },
         { status: 500 }
@@ -139,7 +140,7 @@ export async function POST(request: NextRequest) {
         : `You scored ${goatScore}. You need 90+ to unlock the next level.`,
     });
   } catch (error) {
-    console.error('Error evaluating gauntlet:', error);
+    logger.error('Error evaluating gauntlet', { error });
     return NextResponse.json(
       {
         error: 'Internal server error',

@@ -4,6 +4,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import logger from './logger';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -17,7 +18,10 @@ let supabaseAdminInstance: ReturnType<typeof createClient> | null = null;
 if (typeof window === 'undefined') {
   // Server-side only
   if (!supabaseUrl || !supabaseServiceKey) {
-    console.error('Missing Supabase environment variables (NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)');
+    logger.error('Missing Supabase environment variables', { 
+      hasUrl: !!supabaseUrl, 
+      hasServiceKey: !!supabaseServiceKey 
+    });
   } else {
     supabaseAdminInstance = createClient(supabaseUrl, supabaseServiceKey, {
       auth: {
@@ -48,7 +52,7 @@ export const createSupabaseClient = () => {
 
   if (!supabaseUrl || !supabaseAnonKey) {
     const error = 'Missing client-side Supabase environment variables (NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY)';
-    console.error(error);
+    logger.error('Supabase admin client creation error', { error });
     // Throw error so it's clear what's missing
     throw new Error(error);
   }

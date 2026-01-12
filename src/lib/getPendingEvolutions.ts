@@ -4,6 +4,7 @@
  */
 
 import { supabaseAdmin } from './supabase';
+import logger from './logger';
 
 export interface PendingEvolution {
   id: string;
@@ -44,7 +45,7 @@ export async function getPendingEvolutions(): Promise<PendingEvolution[]> {
     .order('created_at', { ascending: false });
 
   if (error) {
-    console.error('Error fetching pending evolutions:', error);
+    logger.error('Error fetching pending evolutions', { error });
     throw error;
   }
 
@@ -130,7 +131,7 @@ export async function getVersionHistory(assistantId: string): Promise<PendingEvo
     .order('version_number', { ascending: false });
 
   if (error) {
-    console.error('Error fetching version history:', error);
+    logger.error('Error fetching version history', { error });
     throw error;
   }
 

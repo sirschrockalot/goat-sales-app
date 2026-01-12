@@ -5,6 +5,7 @@
 
 import { supabaseAdmin } from '@/lib/supabase';
 import OpenAI from 'openai';
+import logger from '@/lib/logger';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -86,7 +87,7 @@ export async function analyzeDeviation(
       .order('gate_number', { ascending: true });
 
     if (error || !scriptSegments || scriptSegments.length === 0) {
-      console.error('Error fetching script segments:', error);
+      logger.error('Error fetching script segments', { error });
       return getEmptyAnalysis();
     }
 
@@ -160,7 +161,7 @@ export async function analyzeDeviation(
       coachingInsights,
     };
   } catch (error) {
-    console.error('Error analyzing deviation:', error);
+    logger.error('Error analyzing deviation', { error });
     return getEmptyAnalysis();
   }
 }

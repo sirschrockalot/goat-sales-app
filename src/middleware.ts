@@ -6,6 +6,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import logger from './lib/logger';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -46,7 +47,7 @@ export async function middleware(request: NextRequest) {
   if (pathname.startsWith('/admin') || pathname.startsWith('/api/admin')) {
     try {
       if (!supabaseUrl || !supabaseAnonKey) {
-        console.error('Supabase environment variables not configured');
+        logger.error('Supabase environment variables not configured');
         if (pathname.startsWith('/api/')) {
           return NextResponse.json(
             { error: 'Server configuration error' },
@@ -113,7 +114,7 @@ export async function middleware(request: NextRequest) {
       // User is authenticated and is admin - allow access
       return NextResponse.next();
     } catch (error) {
-      console.error('Middleware auth error:', error);
+      logger.error('Middleware auth error', { error, pathname });
       if (pathname.startsWith('/api/')) {
         return NextResponse.json(
           { error: 'Internal server error' },
@@ -128,7 +129,7 @@ export async function middleware(request: NextRequest) {
   if (pathname.startsWith('/gauntlet')) {
     try {
       if (!supabaseUrl || !supabaseAnonKey) {
-        console.error('Supabase environment variables not configured');
+        logger.error('Supabase environment variables not configured');
         return NextResponse.redirect(new URL('/login', request.url));
       }
 
@@ -158,7 +159,7 @@ export async function middleware(request: NextRequest) {
       // User is authenticated - allow access to gauntlet
       return NextResponse.next();
     } catch (error) {
-      console.error('Middleware auth error for gauntlet:', error);
+      logger.error('Middleware auth error for gauntlet', { error });
       return NextResponse.redirect(new URL('/login', request.url));
     }
   }

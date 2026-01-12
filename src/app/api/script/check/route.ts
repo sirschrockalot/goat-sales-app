@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import OpenAI from 'openai';
+import logger from '@/lib/logger';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest) {
   try {
     // Check OpenAI API key
     if (!process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY.includes('your_') || process.env.OPENAI_API_KEY.includes('placeholder')) {
-      console.error('OPENAI_API_KEY not configured');
+      logger.error('OPENAI_API_KEY not configured');
       return NextResponse.json(
         { error: 'OpenAI API key not configured', details: 'OPENAI_API_KEY is missing or invalid' },
         { status: 500 }
@@ -58,7 +59,7 @@ export async function POST(request: NextRequest) {
 
       queryEmbedding = embeddingResponse.data[0].embedding;
     } catch (embeddingError) {
-      console.error('Error generating embedding:', embeddingError);
+      logger.error('Error generating embedding', { error: embeddingError });
       return NextResponse.json(
         { 
           error: 'Failed to generate embedding', 
@@ -119,13 +120,13 @@ export async function POST(request: NextRequest) {
       data = result.data;
       error = result.error;
     } catch (rpcError) {
-      console.error('Error calling RPC function:', rpcError);
+      logger.error('Error calling RPC function', { error: rpcError, rpcFunction });
       
       // If RPC function doesn't exist, return empty results instead of error
       // This allows the UI to continue working even if script tracking isn't fully set up
       const errorMessage = rpcError instanceof Error ? rpcError.message : String(rpcError);
       if (errorMessage.includes('function') && (errorMessage.includes('does not exist') || errorMessage.includes('not found'))) {
-        console.warn(`RPC function ${rpcFunction} does not exist. Returning empty results.`);
+        logger.warn('RPC function does not exist - returning empty results', { rpcFunction });
         return returnEmptyResults(`Script tracking RPC function "${rpcFunction}" not found in database. This feature requires database setup.`);
       }
       
@@ -141,13 +142,13 @@ export async function POST(request: NextRequest) {
     }
 
     if (error) {
-      console.error(`Error calling ${rpcFunction}:`, error);
+      logger.error('Error calling RPC function', { error, rpcFunction });
       
       // If RPC function doesn't exist, return empty results instead of error
       // This allows the UI to continue working even if script tracking isn't fully set up
       const errorMessage = error.message || String(error);
       if (errorMessage.includes('function') && (errorMessage.includes('does not exist') || errorMessage.includes('not found'))) {
-        console.warn(`RPC function ${rpcFunction} does not exist. Returning empty results.`);
+        logger.warn('RPC function does not exist - returning empty results', { rpcFunction });
         return returnEmptyResults(`Script tracking RPC function "${rpcFunction}" not found in database. This feature requires database setup.`);
       }
       
@@ -199,7 +200,7 @@ export async function POST(request: NextRequest) {
       currentGate: currentGate || 1,
     });
   } catch (error) {
-    console.error('Error in POST /api/script/check:', error);
+    logger.error('Error in POST /api/script/check', { error });
     return NextResponse.json(
       {
         error: 'Internal server error',

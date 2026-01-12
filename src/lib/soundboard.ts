@@ -3,6 +3,8 @@
  * Manages audio feedback for gamification
  */
 
+import logger from './logger';
+
 class Soundboard {
   private audioContext: AudioContext | null = null;
   private sounds: Map<string, HTMLAudioElement> = new Map();
@@ -104,7 +106,7 @@ class Soundboard {
       this.createChimeSound();
     } catch (error) {
       if (process.env.NODE_ENV === 'development') {
-        console.error('Error playing chime:', error);
+        logger.error('Error playing chime', { error });
       }
     }
   }
@@ -119,7 +121,7 @@ class Soundboard {
       this.createHornSound();
     } catch (error) {
       if (process.env.NODE_ENV === 'development') {
-        console.error('Error playing horn:', error);
+        logger.error('Error playing horn', { error });
       }
     }
   }
@@ -134,7 +136,7 @@ class Soundboard {
       this.createBleatSound();
     } catch (error) {
       if (process.env.NODE_ENV === 'development') {
-        console.error('Error playing bleat:', error);
+        logger.error('Error playing bleat', { error });
       }
     }
   }
@@ -172,7 +174,7 @@ class Soundboard {
       oscillator.stop(this.audioContext.currentTime + 0.05);
     } catch (error) {
       if (process.env.NODE_ENV === 'development') {
-        console.error('Error playing mechanical click:', error);
+        logger.error('Error playing mechanical click', { error });
       }
     }
   }
@@ -195,7 +197,7 @@ class Soundboard {
         this.playMechanicalClick();
         break;
       default:
-        console.warn(`Unknown sound: ${soundName}`);
+        logger.warn('Unknown sound requested', { soundName });
     }
   }
 }

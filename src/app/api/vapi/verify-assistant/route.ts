@@ -4,6 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import logger from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -63,7 +64,7 @@ export async function GET(request: NextRequest) {
       error: assistant.error,
     });
   } catch (error) {
-    console.error('Error verifying assistant:', error);
+    logger.error('Error verifying assistant', { error, assistantId: searchParams.get('assistantId') });
     return NextResponse.json(
       {
         exists: false,

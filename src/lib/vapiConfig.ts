@@ -3,6 +3,8 @@
  * Handles dynamic configuration for human-like speech patterns
  */
 
+import logger from './logger';
+
 /**
  * Calculate dynamic endOfTurnDetectionTimeout based on sentiment
  * If user's last message contained heavy/negative sentiment, increase delay to simulate "Processing Empathy"
@@ -812,7 +814,7 @@ export async function generateDynamicFirstMessage(
         return `Hi, ${name}, this is [YOUR NAME] with Presidential Digs Real Estate. How are you doing today?`;
       }
     } catch (error) {
-      console.error('Error fetching profile for first message:', error);
+      logger.error('Error fetching profile for first message', { error, userId });
     }
   }
 

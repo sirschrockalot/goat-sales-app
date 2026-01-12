@@ -1,19 +1,15 @@
 /**
  * Live Shadow WebSocket API
  * Receives real-time audio from Chrome Extension and provides coaching
+ * 
+ * NOTE: This is a placeholder implementation. Next.js API routes don't natively support WebSocket upgrades.
+ * For production, consider:
+ * - Using a separate WebSocket server (e.g., ws, Socket.io)
+ * - Using a service like Pusher, Ably, or similar
+ * - Upgrading to Next.js with WebSocket support (experimental)
  */
 
 import { NextRequest } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
-import OpenAI from 'openai';
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
-// This is a placeholder for WebSocket implementation
-// In production, you'd use a WebSocket server (e.g., ws, Socket.io)
-// For Next.js, consider using a separate WebSocket server or upgrading to Next.js with WebSocket support
 
 export async function GET(request: NextRequest) {
   // WebSocket upgrade would happen here
@@ -25,9 +21,3 @@ export async function GET(request: NextRequest) {
     },
   });
 }
-
-// Note: Next.js API routes don't natively support WebSocket upgrades
-// You'll need to either:
-// 1. Use a separate WebSocket server (recommended)
-// 2. Use a service like Pusher, Ably, or similar
-// 3. Upgrade to Next.js with WebSocket support (experimental)

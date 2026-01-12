@@ -4,6 +4,8 @@
  * Falls back to in-memory rate limiting in development
  */
 
+import logger from './logger';
+
 interface RateLimitConfig {
   limit: number; // Number of requests
   window: string; // Time window (e.g., '10s', '1m', '1h')
@@ -68,7 +70,7 @@ export async function rateLimit(
         };
       }
     } catch (error) {
-      console.error('Upstash rate limit error:', error);
+      logger.error('Upstash rate limit error', { error });
       // Fall through to memory store
     }
   }

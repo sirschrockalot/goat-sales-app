@@ -4,6 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import logger from '@/lib/logger';
 import {
   getElevenLabsBalance,
   getTwilioBalance,
@@ -17,11 +18,27 @@ import {
   getInfrastructureCosts,
   getProfitMargin,
 } from '@/lib/billingService';
+import { getUserFromRequest } from '@/lib/getUserFromRequest';
+import { supabaseAdmin } from '@/lib/supabase';
 
 export async function GET(request: NextRequest) {
   try {
-    // TODO: Add admin authentication check
-    // For now, this is accessible to anyone (add auth in production)
+    // Check admin access
+    const { user, error: authError } = await getUserFromRequest(request);
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Verify user is admin
+    const { data: profile, error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .select('is_admin')
+      .eq('id', user.id)
+      .single();
+
+    if (profileError || !profile?.is_admin) {
+      return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
+    }
 
     const [
       elevenLabsBalance,
@@ -69,7 +86,7 @@ export async function GET(request: NextRequest) {
       budgetCheck,
     });
   } catch (error) {
-    console.error('Error fetching billing data:', error);
+    logger.error('Error fetching billing data', { error });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

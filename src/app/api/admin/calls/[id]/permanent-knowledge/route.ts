@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getUserFromRequest } from '@/lib/getUserFromRequest';
+import logger from '@/lib/logger';
 
 export async function PATCH(
   request: NextRequest,
@@ -47,7 +48,7 @@ export async function PATCH(
       .eq('id', callId);
 
     if (updateError) {
-      console.error('Error updating permanent knowledge flag:', updateError);
+      logger.error('Error updating permanent knowledge flag', { error: updateError, callId });
       return NextResponse.json(
         { error: 'Failed to update call' },
         { status: 500 }
@@ -60,7 +61,7 @@ export async function PATCH(
       is_permanent_knowledge,
     });
   } catch (error) {
-    console.error('Error in permanent knowledge API:', error);
+    logger.error('Error in permanent knowledge API', { error });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

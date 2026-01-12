@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import OpenAI from 'openai';
+import logger from '@/lib/logger';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -44,7 +45,7 @@ async function generateEmbedding(text: string): Promise<number[]> {
 
     return response.data[0].embedding;
   } catch (error) {
-    console.error('Error generating embedding:', error);
+    logger.error('Error generating embedding', { error });
     throw new Error('Failed to generate embedding');
   }
 }
@@ -108,7 +109,7 @@ export async function POST(request: NextRequest) {
       .eq('id', id);
 
     if (updateError) {
-      console.error('Error updating embedding:', updateError);
+      logger.error('Error updating embedding', { error: updateError, rebuttalId: id });
       return NextResponse.json(
         { error: 'Failed to update embedding', details: updateError.message },
         { status: 500 }
@@ -123,7 +124,7 @@ export async function POST(request: NextRequest) {
       message: 'Embedding generated and stored successfully',
     });
   } catch (error) {
-    console.error('Error processing webhook:', error);
+    logger.error('Error processing webhook', { error });
     return NextResponse.json(
       {
         error: 'Internal server error',

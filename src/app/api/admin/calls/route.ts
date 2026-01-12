@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import logger from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest) {
       userName: profile?.name || profile?.email || 'Unknown User',
     });
   } catch (error) {
-    console.error('Error fetching admin calls:', error);
+    logger.error('Error fetching admin calls', { error, userId });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

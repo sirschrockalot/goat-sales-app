@@ -17,6 +17,10 @@
     {
       "path": "/api/cron/daily-recap",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/scout-scan",
+      "schedule": "*/5 * * * *"
     }
   ],
   "headers": [

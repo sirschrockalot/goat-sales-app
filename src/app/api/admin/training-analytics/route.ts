@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin, createSupabaseClient } from '@/lib/supabase';
 import { getTrainingAnalytics } from '@/lib/getTrainingAnalytics';
+import logger from '@/lib/logger';
 
 // Cache configuration
 const CACHE_DURATION = 60; // Cache for 60 seconds
@@ -59,7 +60,7 @@ export async function GET(request: NextRequest) {
       .single();
 
     if (profileError || !profile || !profile.is_admin) {
-      console.warn(`[SECURITY] Non-admin user ${user.id} attempted to access training analytics`);
+      logger.warn('Non-admin user attempted to access training analytics', { userId: user.id });
       return NextResponse.json(
         { error: 'Forbidden - Admin access required' },
         { status: 403 }
@@ -75,7 +76,7 @@ export async function GET(request: NextRequest) {
       // Revalidate in background (don't await)
       getTrainingAnalytics()
         .then((freshData) => setCachedData(cacheKey, freshData))
-        .catch((error) => console.error('Background cache refresh failed:', error));
+        .catch((error) => logger.error('Background cache refresh failed', { error }));
       
       return NextResponse.json(cachedData, {
         headers: {
@@ -98,7 +99,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Error in GET /api/admin/training-analytics:', error);
+    logger.error('Error in GET /api/admin/training-analytics', { error });
     return NextResponse.json(
       { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }

@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import logger from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,7 +29,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (error) {
-      console.error('Error calling match_rebuttals:', error);
+      logger.error('Error calling match_rebuttals', { error, query });
       
       // Fallback: If the function doesn't exist or uses different parameters,
       // try a text-based search on the rebuttals table
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest) {
       hints: data || [],
     });
   } catch (error) {
-    console.error('Error in POST /api/hints/search:', error);
+    logger.error('Error in POST /api/hints/search', { error });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

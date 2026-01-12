@@ -12,6 +12,7 @@ import { analyzeVoicePerformance } from '@/lib/voicePerformance';
 import { supabaseAdmin } from '@/lib/supabase';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
 import { getUserFromRequest } from '@/lib/getUserFromRequest';
+import logger from '@/lib/logger';
 
 interface VapiWebhookPayload {
   type: string;
@@ -52,7 +53,8 @@ export async function POST(request: NextRequest) {
                         request.headers.get('x-real-ip') || 
                         'unknown';
         
-        console.warn(`[SECURITY] Invalid Vapi webhook secret attempt from IP: ${clientIP}`, {
+        logger.warn('Invalid Vapi webhook secret attempt', {
+          clientIP,
           timestamp: new Date().toISOString(),
           hasSecret: !!vapiSecret,
           secretLength: vapiSecret?.length || 0,
@@ -66,12 +68,10 @@ export async function POST(request: NextRequest) {
       }
 
       // Log successful validation (optional, can be removed in production)
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[SECURITY] Vapi webhook secret validated successfully');
-      }
+      logger.debug('Vapi webhook secret validated successfully');
     } else {
       // Warn if no secret is configured (security risk)
-      console.warn('[SECURITY] VAPI_SECRET_KEY not configured - webhook is unsecured!');
+      logger.warn('VAPI_SECRET_KEY not configured - webhook is unsecured');
     }
 
     // Rate limiting
@@ -192,7 +192,7 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (error) {
-        console.error('Error storing Aircall call:', error);
+        logger.error('Error storing Aircall call', { error, callId: body.aircallCallId });
         return NextResponse.json(
           { error: 'Failed to store call' },
           { status: 500 }
@@ -214,6 +214,14 @@ export async function POST(request: NextRequest) {
     }
 
     const { call } = body;
+    
+    // Set context for logging
+    logger.setContext({
+      callId: call.id,
+      assistantId: call.metadata?.personaId,
+      userId: call.metadata?.userId,
+    });
+    
     let transcript = call.transcript || '';
     let userId = call.metadata?.userId;
     const personaMode = call.metadata?.personaMode || 'acquisition';
@@ -229,12 +237,12 @@ export async function POST(request: NextRequest) {
           userId = user.id;
         }
       } catch (error) {
-        console.warn('Could not get userId from request:', error);
+        logger.warn('Could not get userId from request', { error });
       }
     }
 
     if (!transcript || !userId) {
-      console.warn('Missing transcript or userId in webhook payload', {
+      logger.warn('Missing transcript or userId in webhook payload', {
         hasTranscript: !!transcript,
         hasUserId: !!userId,
         transcriptLength: transcript.length,
@@ -358,9 +366,7 @@ export async function POST(request: NextRequest) {
             });
           } catch (error) {
             // Silently fail - XP awarding is not critical
-            if (process.env.NODE_ENV === 'development') {
-              console.error('Error awarding XP:', error);
-            }
+            logger.debug('Error awarding XP (non-critical)', { error, userId });
           }
         }
 
@@ -391,15 +397,13 @@ export async function POST(request: NextRequest) {
                       applied: false,
                     });
                 } catch (error) {
-                  console.error('Error saving AI optimization:', error);
+                  logger.error('Error saving AI optimization', { error, assistantId });
                 }
               }
             }
           } catch (error) {
             // Silently fail - sentiment analysis is not critical
-            if (process.env.NODE_ENV === 'development') {
-              console.error('Error analyzing sentiment:', error);
-            }
+            logger.debug('Error analyzing sentiment (non-critical)', { error, callId: call.id });
           }
         }
 
@@ -452,8 +456,7 @@ export async function POST(request: NextRequest) {
           .single();
 
     if (error) {
-      console.error('Error storing call in database:', error);
-      console.error('Error details:', JSON.stringify(error, null, 2));
+      logger.error('Error storing call in database', { error, callId: call.id });
       return NextResponse.json(
         { 
           error: 'Failed to store call',
@@ -474,9 +477,7 @@ export async function POST(request: NextRequest) {
           .gte('created_at', new Date(Date.now() - 60000).toISOString()); // Last minute
       } catch (error) {
         // Silently fail - not critical
-        if (process.env.NODE_ENV === 'development') {
-          console.error('Error updating optimization call_id:', error);
-        }
+        logger.debug('Error updating optimization call_id (non-critical)', { error, callId: data.id });
       }
     }
 
@@ -489,7 +490,7 @@ export async function POST(request: NextRequest) {
         data.contract_signed || false,
         data.final_offer_price || null
       ).catch(err => {
-        console.error('Error analyzing voice performance:', err);
+        logger.error('Error analyzing voice performance', { error: err, callId: data.id });
       });
     }
 
@@ -499,7 +500,7 @@ export async function POST(request: NextRequest) {
       goatScore: gradingResult.goatScore,
     });
   } catch (error) {
-    console.error('Error processing webhook:', error);
+    logger.error('Error processing webhook', { error });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

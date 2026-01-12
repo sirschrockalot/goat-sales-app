@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin, createSupabaseClient } from '@/lib/supabase';
+import logger from '@/lib/logger';
 
 const BASE_XP_PER_SECOND = 1; // Base XP per second of call
 const GOAT_MODE_MULTIPLIER = 2; // 2x XP during Goat Mode
@@ -67,7 +68,7 @@ export async function POST(request: NextRequest) {
       .eq('id', userId);
 
     if (updateError) {
-      console.error('Error updating XP:', updateError);
+      logger.error('Error updating XP', { error: updateError, userId });
       return NextResponse.json(
         { error: 'Failed to update XP' },
         { status: 500 }
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest) {
       newTotalXP: (profile.experience_points || 0) + totalXP,
     });
   } catch (error) {
-    console.error('Error awarding XP:', error);
+    logger.error('Error awarding XP', { error });
     return NextResponse.json(
       {
         error: 'Internal server error',

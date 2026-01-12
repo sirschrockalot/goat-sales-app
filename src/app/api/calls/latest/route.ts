@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getUserFromRequest } from '@/lib/getUserFromRequest';
+import logger from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
@@ -30,7 +31,7 @@ export async function GET(request: NextRequest) {
       .single();
 
     if (error) {
-      console.error('Error fetching latest call:', error);
+      logger.error('Error fetching latest call', { error, userId });
       return NextResponse.json(
         { error: 'Call not found' },
         { status: 404 }
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(data);
   } catch (error) {
-    console.error('Error in GET /api/calls/latest:', error);
+    logger.error('Error in GET /api/calls/latest', { error });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

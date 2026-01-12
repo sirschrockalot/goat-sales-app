@@ -5,6 +5,7 @@
  */
 
 import OpenAI from 'openai';
+import logger from './logger';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -132,7 +133,7 @@ export async function analyzeSentiment(transcript: string): Promise<SentimentAna
       suggestedImprovements: parsed.suggestedImprovements || [],
     };
   } catch (error) {
-    console.error('Error analyzing sentiment:', error);
+    logger.error('Error analyzing sentiment', { error });
     // Return default analysis on error
     return {
       emotionalPeak: {
