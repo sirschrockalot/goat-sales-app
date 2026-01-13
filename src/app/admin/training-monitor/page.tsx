@@ -14,14 +14,22 @@ import { useAuth } from '@/contexts/AuthContext';
 
 export default function TrainingMonitorPage() {
   const router = useRouter();
-  const { isAdmin, loading: authLoading } = useAuth();
+  const { isAdmin, loading: authLoading, user, refreshProfile } = useAuth();
+
+  // Try to refresh profile on mount to ensure admin status is up to date
+  useEffect(() => {
+    if (!authLoading && user) {
+      refreshProfile();
+    }
+  }, [authLoading, user, refreshProfile]);
 
   // Redirect non-admins
   useEffect(() => {
     if (!authLoading && !isAdmin) {
+      console.warn('User is not admin, redirecting. User:', user);
       router.push('/');
     }
-  }, [isAdmin, authLoading, router]);
+  }, [isAdmin, authLoading, router, user]);
 
   if (authLoading) {
     return (

@@ -126,14 +126,49 @@ export async function middleware(request: NextRequest) {
         .single();
 
       const profileData = profile as any;
-      if (profileError || !profileData || !profileData.is_admin) {
+      if (profileError) {
+        console.error('Middleware profile error:', profileError.message, 'User ID:', user.id);
+        // If profile doesn't exist, allow access and let the app handle it
+        // This prevents blocking legitimate users whose profiles haven't been created yet
+        if (pathname.startsWith('/api/')) {
+          return NextResponse.json(
+            { error: 'Profile not found' },
+            { status: 404 }
+          );
+        }
+        // For pages, allow access - the page component will handle the redirect
+        return NextResponse.next();
+      }
+      
+      if (!profileData || !profileData.is_admin) {
+        console.warn('Middleware: User is not admin', { 
+          userId: user.id, 
+          email: user.email, 
+          isAdmin: profileData?.is_admin,
+          pathname,
+          hasProfile: !!profileData
+        });
         if (pathname.startsWith('/api/')) {
           return NextResponse.json(
             { error: 'Forbidden - Admin access required' },
             { status: 403 }
           );
         }
+        // For pages, redirect to home
+        // But log the issue for debugging
+        console.error('Middleware blocking admin route access:', {
+          userId: user.id,
+          email: user.email,
+          pathname,
+          profileExists: !!profileData,
+          isAdmin: profileData?.is_admin
+        });
         return NextResponse.redirect(new URL('/', request.url));
+      }
+      
+      // Log successful admin access for debugging
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Middleware: Admin access granted', { userId: user.id, email: user.email, pathname });
       }
 
       // User is authenticated and is admin - allow access

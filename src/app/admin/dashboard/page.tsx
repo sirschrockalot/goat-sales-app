@@ -65,7 +65,7 @@ interface Rebuttal {
 
 export default function AdminDashboard() {
   const router = useRouter();
-  const { isAdmin, loading: authLoading } = useAuth();
+  const { isAdmin, loading: authLoading, user, refreshProfile } = useAuth();
   const [stats, setStats] = useState<Stats | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [objectionTrends, setObjectionTrends] = useState<ObjectionTrend[]>([]);
@@ -76,12 +76,33 @@ export default function AdminDashboard() {
   const [inviting, setInviting] = useState(false);
   const [inviteMessage, setInviteMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Redirect non-admins
+  // Try to refresh profile on mount to ensure admin status is up to date
   useEffect(() => {
-    if (!authLoading && !isAdmin) {
-      router.push('/');
+    if (!authLoading && user) {
+      refreshProfile();
     }
-  }, [isAdmin, authLoading, router]);
+  }, [authLoading, user, refreshProfile]);
+
+  // Redirect non-admins - but only after auth is fully loaded and we've confirmed they're not admin
+  useEffect(() => {
+    // Don't redirect while still loading
+    if (authLoading) {
+      return;
+    }
+    
+    // If we have a user but they're not admin, redirect
+    // But give it a moment for refreshProfile to complete
+    if (user && !isAdmin) {
+      console.warn('Admin dashboard: User is not admin, redirecting. User:', user);
+      // Small delay to allow profile refresh to complete
+      const timeoutId = setTimeout(() => {
+        if (!isAdmin) {
+          router.push('/');
+        }
+      }, 1000);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [isAdmin, authLoading, router, user]);
 
   useEffect(() => {
     const fetchData = async () => {

@@ -97,9 +97,15 @@ export default function HomeScreen({
       <div className="space-y-4 mb-12 flex-1">
         {/* Admin Dashboard Link - Only for admins */}
         {isAdmin && (
-          <button
-            onClick={() => router.push('/admin/dashboard')}
-            className="w-full rounded-2xl p-6 border-2 border-amber-400/50 flex items-center gap-4 active:scale-[0.98] transition-all duration-200"
+          <a
+            href="/admin/dashboard"
+            onClick={(e) => {
+              console.log('Manager Dashboard clicked, isAdmin:', isAdmin, 'user:', user);
+              // Try router.push first for client-side navigation
+              e.preventDefault();
+              router.push('/admin/dashboard');
+            }}
+            className="w-full rounded-2xl p-6 border-2 border-amber-400/50 flex items-center gap-4 active:scale-[0.98] transition-all duration-200 cursor-pointer"
             style={{ 
               backgroundColor: 'rgba(251, 191, 36, 0.1)',
               boxShadow: '0 0 20px rgba(251, 191, 36, 0.4)'
@@ -112,7 +118,7 @@ export default function HomeScreen({
               <div className="text-2xl font-bold text-amber-400 mb-1">MANAGER DASHBOARD</div>
               <div className="text-sm text-gray-400">Team performance & rebuttal curation</div>
             </div>
-          </button>
+          </a>
         )}
 
         {/* The Gauntlet */}

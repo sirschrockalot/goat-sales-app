@@ -1,0 +1,83 @@
+{
+  "name": "Goat Sales App",
+  "description": "AI-powered sales training application with autonomous battle system",
+  "repository": "https://github.com/your-username/goat-sales-app",
+  "logo": "https://node-js-sample.herokuapp.com/node.png",
+  "keywords": ["nextjs", "ai", "sales", "training"],
+  "buildpacks": [
+    {
+      "url": "heroku/nodejs"
+    }
+  ],
+  "env": {
+    "NODE_ENV": {
+      "required": true,
+      "value": "production"
+    },
+    "NEXT_PUBLIC_SUPABASE_URL": {
+      "required": true,
+      "description": "Supabase production project URL"
+    },
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY": {
+      "required": true,
+      "description": "Supabase anonymous key"
+    },
+    "SUPABASE_SERVICE_ROLE_KEY": {
+      "required": true,
+      "description": "Supabase service role key"
+    },
+    "SUPABASE_SANDBOX_URL": {
+      "required": true,
+      "description": "Supabase sandbox project URL for training"
+    },
+    "SANDBOX_SUPABASE_SERVICE_ROLE_KEY": {
+      "required": true,
+      "description": "Sandbox service role key"
+    },
+    "SANDBOX_SUPABASE_ANON_KEY": {
+      "required": true,
+      "description": "Sandbox anonymous key"
+    },
+    "OPENAI_API_KEY": {
+      "required": true,
+      "description": "OpenAI API key"
+    },
+    "SANDBOX_OPENAI_API_KEY": {
+      "required": false,
+      "description": "Optional: Separate OpenAI key for sandbox"
+    },
+    "NEXT_PUBLIC_VAPI_API_KEY": {
+      "required": true,
+      "description": "Vapi.ai public API key"
+    },
+    "VAPI_SECRET_KEY": {
+      "required": true,
+      "description": "Vapi.ai secret key"
+    },
+    "ELEVEN_LABS_API_KEY": {
+      "required": true,
+      "description": "ElevenLabs API key"
+    },
+    "DEEPGRAM_API_KEY": {
+      "required": true,
+      "description": "Deepgram API key"
+    },
+    "CRON_SECRET": {
+      "required": true,
+      "description": "Secret for cron job authentication"
+    },
+    "NEXT_PUBLIC_APP_URL": {
+      "required": false,
+      "description": "App URL (will be set automatically after first deploy)"
+    }
+  },
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "standard-1x"
+    }
+  },
+  "addons": [
+    "scheduler:standard"
+  ]
+}

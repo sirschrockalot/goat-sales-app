@@ -55,7 +55,7 @@ export default function LoginPage() {
         });
 
         if (signUpError) {
-          setError(signUpError.message);
+          setError(signUpError.message || 'Failed to create account. Please check your email and try again.');
           return;
         }
 
@@ -70,7 +70,7 @@ export default function LoginPage() {
         });
 
         if (signInError) {
-          setError(signInError.message);
+          setError(signInError.message || 'Invalid email or password.');
           return;
         }
 
@@ -80,7 +80,16 @@ export default function LoginPage() {
         }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      console.error('Auth error:', err);
+      if (err instanceof Error) {
+        if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+          setError('Cannot connect to authentication service. Please check your internet connection and try again. If the problem persists, contact support.');
+        } else {
+          setError(err.message);
+        }
+      } else {
+        setError('An unexpected error occurred. Please try again.');
+      }
     } finally {
       setLoading(false);
     }

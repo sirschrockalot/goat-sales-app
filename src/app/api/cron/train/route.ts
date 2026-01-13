@@ -131,22 +131,30 @@ async function runTrainingBatch(batchSize: number): Promise<TrainingBatchResult>
     const appConfig = getAppConfig();
 
     // Dynamically import runBattleLoop from root scripts (server-side only)
-    // Note: Scripts directory needs to be accessible in production
+    // Use tsx to load TypeScript files at runtime
     const projectRoot = process.cwd();
-    const autonomousBattlePath = path.join(projectRoot, 'scripts', 'autonomousBattle.js');
+    const autonomousBattlePath = path.join(projectRoot, 'scripts', 'autonomousBattle.ts');
     
-    // Try to import the script - use eval to prevent Next.js from analyzing at build time
+    // Register tsx loader for TypeScript files
+    try {
+      // Try to use tsx to load TypeScript file
+      const { register } = await import('tsx/esm/api');
+      register();
+    } catch {
+      // tsx might not be available, will try direct import
+    }
+    
+    // Import the TypeScript file
     let autonomousBattleModule: any;
     try {
-      // Use Function constructor to create dynamic import that Next.js won't analyze
-      const importPath = `file://${autonomousBattlePath}`;
-      autonomousBattleModule = await (new Function('return import("' + importPath.replace(/"/g, '\\"') + '")'))();
+      const fileUrl = `file://${autonomousBattlePath}`;
+      autonomousBattleModule = await import(fileUrl);
     } catch {
       // Fallback: try relative path
       try {
-        autonomousBattleModule = await (new Function('return import("../../../scripts/autonomousBattle.js")'))();
+        autonomousBattleModule = await import('../../../scripts/autonomousBattle.ts');
       } catch {
-        throw new Error('Failed to import autonomousBattle script. Scripts directory may not be accessible in production build.');
+        throw new Error('Failed to import autonomousBattle script. Ensure tsx is available and scripts directory is accessible.');
       }
     }
     
