@@ -402,9 +402,18 @@ export class VapiClient {
 
     try {
       // Verify microphone access before starting call
+      // Request audio with constraints for better sensitivity
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        logger.debug('Microphone access confirmed');
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          audio: {
+            echoCancellation: true, // Keep echo cancellation for call quality
+            noiseSuppression: false, // Disable browser noise suppression - let Vapi handle it
+            autoGainControl: true, // Enable auto gain control to boost quieter speech
+            sampleRate: 48000, // Higher sample rate for better quality
+            channelCount: 1, // Mono channel
+          }
+        });
+        logger.debug('Microphone access confirmed with enhanced audio constraints');
         // Stop the test stream - we just needed to verify access
         stream.getTracks().forEach(track => track.stop());
       } catch (micError) {

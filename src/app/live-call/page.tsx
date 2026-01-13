@@ -82,11 +82,19 @@ export default function LiveCallPage() {
     const requestMicrophonePermission = async () => {
       try {
         if (typeof window !== 'undefined' && navigator.mediaDevices) {
-          // Request microphone permission early
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          // Request microphone permission early with enhanced audio constraints for better sensitivity
+          const stream = await navigator.mediaDevices.getUserMedia({ 
+            audio: {
+              echoCancellation: true, // Keep echo cancellation for call quality
+              noiseSuppression: false, // Disable browser noise suppression - let Vapi handle it
+              autoGainControl: true, // Enable auto gain control to boost quieter speech
+              sampleRate: 48000, // Higher sample rate for better quality
+              channelCount: 1, // Mono channel
+            }
+          });
           // Stop the stream immediately - we just needed permission
           stream.getTracks().forEach(track => track.stop());
-          console.log('✅ Microphone permission granted');
+          console.log('✅ Microphone permission granted with enhanced audio settings');
         }
       } catch (error) {
         console.error('❌ Microphone permission denied:', error);

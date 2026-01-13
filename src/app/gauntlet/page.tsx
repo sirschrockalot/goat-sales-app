@@ -61,12 +61,20 @@ export default function GauntletPage() {
 
   const handleStartChallenge = async (level: GauntletLevel) => {
     try {
-      // Request microphone permission before starting challenge
+      // Request microphone permission before starting challenge with enhanced audio constraints
       if (typeof window !== 'undefined' && navigator.mediaDevices) {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          audio: {
+            echoCancellation: true, // Keep echo cancellation for call quality
+            noiseSuppression: false, // Disable browser noise suppression - let Vapi handle it
+            autoGainControl: true, // Enable auto gain control to boost quieter speech
+            sampleRate: 48000, // Higher sample rate for better quality
+            channelCount: 1, // Mono channel
+          }
+        });
         // Stop the stream immediately - we just needed permission
         stream.getTracks().forEach(track => track.stop());
-        console.log('✅ Microphone permission granted');
+        console.log('✅ Microphone permission granted with enhanced audio settings');
       }
 
       // Create assistant for this gauntlet level

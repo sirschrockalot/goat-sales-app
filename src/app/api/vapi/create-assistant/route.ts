@@ -361,6 +361,9 @@ export async function POST(request: NextRequest) {
             model: deepgramConfig.model, // nova-2-general for production
             endpointing: deepgramConfig.endpointing, // 500ms (Vapi maximum) - gives time for speech completion
             language: deepgramConfig.language, // en-US for better accuracy
+            // Note: Vapi API may support additional Deepgram parameters for sensitivity
+            // If Vapi supports these, they can help with quieter speech detection
+            // Check Vapi documentation for vad_threshold, vad_events, or similar parameters
             // Note: punctuate and smart_format are not supported in Vapi API
             // These may be configured via Deepgram directly or in Vapi Dashboard settings
             // Add fallback plan for reliability (Vapi uses fallbackPlan, not fallback)
@@ -410,7 +413,7 @@ export async function POST(request: NextRequest) {
         },
         // Configure background speech denoising to filter out user's background noise
         // This prevents background noise from interrupting the AI agent
-        // NOTE: Re-enabled because background noise was causing the agent to stop talking
+        // NOTE: Reduced aggressiveness to improve microphone sensitivity for quieter speech
         backgroundSpeechDenoisingPlan: {
           smartDenoisingPlan: {
             enabled: true, // Enable intelligent noise reduction using Krisp
@@ -418,9 +421,9 @@ export async function POST(request: NextRequest) {
           fourierDenoisingPlan: {
             enabled: true, // Enable additional noise filtering
             mediaDetectionEnabled: true, // Detect and filter media-related noise
-            baselineOffsetDb: -10, // Noise reduction level (-10dB)
+            baselineOffsetDb: -5, // Reduced from -10dB to -5dB for better sensitivity to quieter speech
             windowSizeMs: 2000, // Adaptation speed to noise changes (2 seconds)
-            baselinePercentile: 90, // Focus on clear speech by setting noise threshold
+            baselinePercentile: 75, // Reduced from 90 to 75 to allow more audio through (less aggressive filtering)
           },
         },
         // Note: backgroundSound is kept disabled to avoid adding artificial noise
