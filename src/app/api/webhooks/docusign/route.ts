@@ -396,6 +396,7 @@ async function handleRecipientCompleted(data: DocuSignWebhookPayload['data']) {
       completedAt: new Date(data.eventDateTime),
       signedPdfUrl: data.signedPdfUrl,
     });
+    }
   }
 
   // TODO: Send real-time celebration message to Vapi call
