@@ -356,7 +356,7 @@ Return a JSON object with:
   }
 
   const score = JSON.parse(response) as RefereeScore;
-  score.totalScore = score.mathDefense * 3.33 + score.humanity * 3.33 + score.success * 3.34;
+  score.totalScore = Math.round(score.mathDefense * 3.33 + score.humanity * 3.33 + score.success * 3.34);
 
   return score;
 }
@@ -465,6 +465,7 @@ export async function runBattle(
   const score = await refereeBattle(transcript, isThrottledForReferee);
 
   // Save battle to database
+  // Ensure all integer fields are properly rounded
   const { data: battle, error: battleError } = await (supabaseAdmin as any)
     .from('sandbox_battles')
     .insert({
@@ -472,11 +473,11 @@ export async function runBattle(
       closer_thread_id: closerThreadId,
       persona_thread_id: personaThreadId,
       transcript: transcript,
-      referee_score: score.totalScore,
+      referee_score: Math.round(score.totalScore), // Ensure integer
       referee_feedback: score.feedback,
-      math_defense_score: score.mathDefense,
-      humanity_score: score.humanity,
-      success_score: score.success,
+      math_defense_score: Math.round(score.mathDefense), // Ensure integer
+      humanity_score: Math.round(score.humanity), // Ensure integer
+      success_score: Math.round(score.success), // Ensure integer
       verbal_yes_to_memorandum: score.verbalYesToMemorandum,
       winning_rebuttal: score.winningRebuttal || null,
       turns: battleState.turn,

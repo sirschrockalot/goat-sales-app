@@ -7,7 +7,35 @@
 // Load environment variables from .env.local
 import * as dotenv from 'dotenv';
 import * as path from 'path';
-dotenv.config({ path: path.join(process.cwd(), '.env.local') });
+import * as fs from 'fs';
+
+// Load .env.local first (override any existing env vars)
+const envPath = path.join(process.cwd(), '.env.local');
+if (fs.existsSync(envPath)) {
+  const result = dotenv.config({ path: envPath, override: true });
+  if (result.error) {
+    console.warn('⚠️  Error loading .env.local:', result.error.message);
+  }
+}
+
+// Also try .env.development as fallback if key still not set
+if (!process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY.includes('your_ope')) {
+  const devEnvPath = path.join(process.cwd(), '.env.development');
+  if (fs.existsSync(devEnvPath)) {
+    dotenv.config({ path: devEnvPath, override: true });
+  }
+}
+
+// Verify API key is loaded (check if it's a valid format, not a placeholder)
+const apiKey = process.env.OPENAI_API_KEY || '';
+if (!apiKey || apiKey.length < 20 || apiKey.includes('your_ope') || apiKey.includes('placeholder') || !apiKey.startsWith('sk-')) {
+  console.error('❌ OPENAI_API_KEY not properly loaded or is invalid');
+  console.error(`   Current value: ${apiKey ? apiKey.substring(0, 30) + '...' : 'NOT SET'}`);
+  console.error('   Please ensure OPENAI_API_KEY is set in .env.local or .env.development');
+  console.error(`   Checked .env.local: ${fs.existsSync(envPath) ? 'EXISTS' : 'NOT FOUND'}`);
+  process.exit(1);
+}
+console.log(`✅ OpenAI API key loaded (${apiKey.substring(0, 15)}...)`);
 
 import { runBattleLoop } from '../src/lib/training';
 import { getBudgetStatus } from '../src/lib/budgetMonitor';
