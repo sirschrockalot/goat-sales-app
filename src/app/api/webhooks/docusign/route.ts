@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
     if (!rateLimitResult.success) {
       return NextResponse.json(
         { error: 'Rate limit exceeded' },
-        { status: 429, headers: rateLimitResult.headers }
+        { status: 429 }
       );
     }
 
