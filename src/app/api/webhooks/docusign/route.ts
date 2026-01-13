@@ -385,9 +385,10 @@ async function handleRecipientCompleted(data: DocuSignWebhookPayload['data']) {
   }
 
   // Notify active signature monitor of completion
-  const { getActiveMonitor } = await import('@/lib/signatureMonitor');
-  const monitor = getActiveMonitor(data.callId);
-  if (monitor) {
+  if (data.callId) {
+    const { getActiveMonitor } = await import('@/lib/signatureMonitor');
+    const monitor = getActiveMonitor(data.callId);
+    if (monitor) {
     await monitor.updateStatusFromWebhook({
       envelopeId: data.envelopeId,
       status: 'completed',
