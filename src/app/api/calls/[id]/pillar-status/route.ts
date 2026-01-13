@@ -34,7 +34,7 @@ export async function GET(
       .eq('id', callId)
       .single();
 
-    if (callError) {
+    if (callError || !call) {
       logger.error('Error fetching call for pillar audit', {
         error: callError,
         callId,
@@ -43,11 +43,11 @@ export async function GET(
     }
 
     // Audit transcript for pillar compliance
-    const transcript = call.transcript || '';
+    const transcript = (call as any).transcript || '';
     const auditResult = auditPillars(callId, transcript);
 
     // Get walkthrough progress from metadata
-    const walkthroughProgress = (call.metadata as any)?.walkthroughProgress || 0;
+    const walkthroughProgress = ((call as any).metadata as any)?.walkthroughProgress || 0;
 
     return NextResponse.json({
       flags: auditResult.flags,
