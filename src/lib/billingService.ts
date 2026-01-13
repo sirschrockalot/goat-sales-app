@@ -858,14 +858,16 @@ export async function getVercelUsage(): Promise<VercelUsage> {
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
     // Heroku billing API endpoint (placeholder - implement Heroku billing API if needed)
-    // For now, return empty usage data
+    // For now, return empty usage data matching VercelUsage type
     // TODO: Implement Heroku billing API integration
     return {
-      budgetCap: HOSTING_BUDGET_CAP,
-      period: new Date().toISOString().slice(0, 7), // YYYY-MM format
-      currentUsage: 0,
-      remainingBudget: HOSTING_BUDGET_CAP,
-      percentageUsed: 0,
+      ...budgetInfo,
+      fluidComputeHours: 0,
+      bandwidthGB: 0,
+      fluidComputeCost: 0,
+      bandwidthCost: 0,
+      totalCost: 0,
+      withinBudget: true,
     };
 
     if (!response.ok) {
