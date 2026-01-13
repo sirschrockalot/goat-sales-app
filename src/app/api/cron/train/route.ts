@@ -354,8 +354,11 @@ export async function POST(request: NextRequest) {
 
     // Run training in background to avoid timeout
     // Return immediately with "started" status
-    console.log(`[TRAINING] Triggering background batch with size ${batchSize}`);
-    runTrainingBatch(batchSize)
+    console.log(`[TRAINING] POST endpoint reached, batchSize: ${batchSize}`);
+    logger.info('POST training endpoint called', { batchSize });
+    
+    // Use Next.js waitUntil to keep background task alive
+    const trainingPromise = runTrainingBatch(batchSize)
       .then((result) => {
         console.log(`[TRAINING] Background batch completed: ${result.battlesCompleted} battles, $${result.totalCost.toFixed(4)} cost`);
         logger.info('Background training batch completed', {
@@ -364,15 +367,28 @@ export async function POST(request: NextRequest) {
           totalCost: result.totalCost,
           errors: result.errors,
         });
+        return result;
       })
       .catch((error) => {
         console.error(`[TRAINING] Background batch error:`, error);
+        console.error(`[TRAINING] Error stack:`, error.stack);
         logger.error('Error in background training batch', {
           error: error.message || String(error),
           stack: error.stack,
           batchSize,
         });
+        throw error;
       });
+
+    // Try to use waitUntil if available (Next.js 13+)
+    if (typeof (request as any).waitUntil === 'function') {
+      (request as any).waitUntil(trainingPromise);
+    } else {
+      // Fallback: just start the promise (may be terminated when response is sent)
+      trainingPromise.catch(() => {
+        // Silently handle - already logged
+      });
+    }
 
     return NextResponse.json({
       success: true,
