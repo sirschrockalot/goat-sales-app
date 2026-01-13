@@ -6,6 +6,7 @@
 
 import { supabaseAdmin } from './supabase';
 import logger from './logger';
+import { setKillSwitchActive } from './killSwitchUtils';
 
 // Daily hard cap for training (USD)
 export const DAILY_TRAINING_CAP = 15.0;
@@ -141,14 +142,20 @@ export async function checkBudget(): Promise<void> {
   const status = await getBudgetStatus();
 
   if (status.isExceeded) {
+    // Automatically activate kill-switch when budget is exceeded
+    // This ensures all training jobs stop, even if running in parallel or on different instances
+    setKillSwitchActive(true);
+    
     const message = `🚨 BUDGET LIMIT REACHED - TRAINING PAUSED\n\n` +
       `Daily Spend: $${status.dailySpend.toFixed(2)}\n` +
       `Daily Cap: $${DAILY_TRAINING_CAP.toFixed(2)}\n` +
-      `Training has been paused to prevent overspending.`;
+      `Training has been automatically paused to prevent overspending.\n` +
+      `Kill-switch has been activated. All training jobs will stop.`;
 
-    logger.error('Budget limit reached', {
+    logger.error('Budget limit reached - kill-switch activated automatically', {
       dailySpend: status.dailySpend,
       dailyCap: DAILY_TRAINING_CAP,
+      killSwitchActivated: true,
     });
 
     // Send urgent Slack alert

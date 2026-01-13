@@ -7,6 +7,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import logger from '@/lib/logger';
 import { getEnvironmentConfig } from '@/lib/env-manager';
 import { getAppConfig } from '@/lib/config';
+import { checkBudget } from '@/lib/budgetMonitor';
+import { isKillSwitchActive } from '@/lib/killSwitchUtils';
 
 // assertSandboxMode will be imported dynamically or we'll use env-manager's assertEnvironment
 
@@ -218,6 +220,37 @@ export async function GET(request: NextRequest) {
 
     logger.info('Training cron job triggered', { batchSize, maxExecutionTime });
 
+    // Check kill-switch before starting training
+    if (isKillSwitchActive()) {
+      logger.warn('Training blocked: Kill-switch is active');
+      return NextResponse.json(
+        {
+          error: 'Training paused',
+          message: 'Kill-switch is active. Training has been automatically paused due to budget limit or manual activation.',
+          killSwitchActive: true,
+        },
+        { status: 503 }
+      );
+    }
+
+    // Check budget before starting training
+    try {
+      await checkBudget();
+    } catch (error: any) {
+      if (error?.message?.includes('Budget Limit Reached')) {
+        logger.error('Training blocked: Budget limit reached', { error: error.message });
+        return NextResponse.json(
+          {
+            error: 'Budget limit reached',
+            message: error.message,
+            killSwitchActive: true, // Kill-switch was automatically activated
+          },
+          { status: 503 }
+        );
+      }
+      throw error;
+    }
+
     // Run training batch with timeout protection
     const batchPromise = runTrainingBatch(batchSize);
     const timeoutPromise = new Promise<TrainingBatchResult>((resolve) => {
@@ -281,6 +314,37 @@ export async function POST(request: NextRequest) {
     const batchSize = Math.min(Math.max(1, requestedBatchSize), appConfig.training.maxBatchSize || MAX_BATCH_SIZE);
 
     logger.info('Training batch manually triggered', { batchSize });
+
+    // Check kill-switch before starting training
+    if (isKillSwitchActive()) {
+      logger.warn('Training blocked: Kill-switch is active');
+      return NextResponse.json(
+        {
+          error: 'Training paused',
+          message: 'Kill-switch is active. Training has been automatically paused due to budget limit or manual activation.',
+          killSwitchActive: true,
+        },
+        { status: 503 }
+      );
+    }
+
+    // Check budget before starting training
+    try {
+      await checkBudget();
+    } catch (error: any) {
+      if (error?.message?.includes('Budget Limit Reached')) {
+        logger.error('Training blocked: Budget limit reached', { error: error.message });
+        return NextResponse.json(
+          {
+            error: 'Budget limit reached',
+            message: error.message,
+            killSwitchActive: true, // Kill-switch was automatically activated
+          },
+          { status: 503 }
+        );
+      }
+      throw error;
+    }
 
     // Run training in background to avoid timeout
     // Return immediately with "started" status

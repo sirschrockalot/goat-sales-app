@@ -75,9 +75,20 @@ export function checkKillSwitch(cost: number): void {
 }
 
 /**
- * Check if kill-switch is active via API
+ * Check if kill-switch is active via API or local state
  */
 async function checkKillSwitchAPI(): Promise<boolean> {
+  // First check local kill-switch state (fastest)
+  try {
+    const { isKillSwitchActive } = await import('@/lib/killSwitchUtils');
+    if (isKillSwitchActive()) {
+      return true;
+    }
+  } catch (error) {
+    logger.warn('Could not check local kill-switch state', { error });
+  }
+
+  // Fallback to API check (for distributed systems)
   try {
     const apiUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
     const response = await fetch(`${apiUrl}/api/sandbox/kill-switch`, {
@@ -90,7 +101,7 @@ async function checkKillSwitchAPI(): Promise<boolean> {
       return data.active === true;
     }
   } catch (error) {
-    logger.warn('Kill-switch API not available, using cost-based check only', { error });
+    logger.warn('Kill-switch API not available, using local state only', { error });
   }
 
   return false;
