@@ -122,8 +122,14 @@ async function initializeBattle(): Promise<{ closerThreadId: string; personaThre
  */
 async function getApexCloserPrompt(): Promise<string> {
   const basePromptPath = path.join(process.cwd(), 'base_prompt.txt');
-  if (await fs.pathExists(basePromptPath)) {
-    return await fs.readFile(basePromptPath, 'utf-8');
+  try {
+    // Use fs-extra's pathExists and readFile
+    if (await fs.pathExists(basePromptPath)) {
+      return await fs.readFile(basePromptPath, 'utf-8');
+    }
+  } catch (error) {
+    // File doesn't exist or can't be read, use fallback
+    logger.debug('Could not read base_prompt.txt, using fallback', { error });
   }
   // Fallback prompt if file doesn't exist
   return `You are the Apex Acquisitions Closer. Your goal is to convert distressed property leads into signed contracts at $82,700.00.
@@ -677,7 +683,9 @@ export async function runBattleLoop(
         await new Promise((resolve) => setTimeout(resolve, delayBetweenBattles));
       }
     } catch (error: any) {
+      console.error(`[TRAINING] Error in battle for ${(persona as any).name}:`, error.message || String(error));
       if (error?.message?.includes('Kill-switch')) {
+        console.log(`[TRAINING] Kill-switch activated, stopping`);
         logger.error('Kill-switch activated during battle', { persona: (persona as any).name, totalCost });
         killSwitchTriggered = true;
         break;
@@ -691,6 +699,7 @@ export async function runBattleLoop(
       });
       // Continue with next battle unless it's a critical error
       // Don't break the loop - let other battles continue
+      console.log(`[TRAINING] Continuing to next persona despite error`);
     }
   }
 
