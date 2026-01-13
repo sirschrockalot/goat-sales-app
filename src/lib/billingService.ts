@@ -850,14 +850,6 @@ export async function getVercelUsage(): Promise<VercelUsage> {
     budgetCap: HOSTING_BUDGET_CAP,
     period: new Date().toISOString().slice(0, 7), // YYYY-MM format
   };
-
-  try {
-    // Heroku billing API endpoint (placeholder - implement Heroku billing API if needed)
-    // For now, return empty usage data matching VercelUsage type
-    // TODO: Implement Heroku billing API integration
-    return budgetInfo;
-
-    if (!response.ok) {
       // If API fails, estimate from webhook traffic
       logger.warn('Vercel API not available, estimating from call logs');
       return await estimateVercelUsageFromLogs();
