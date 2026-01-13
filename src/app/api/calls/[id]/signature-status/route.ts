@@ -75,7 +75,7 @@ export async function GET(
       timeToSign: callData.time_to_sign,
       propertyAddress: callData.property_address,
       dealProfit,
-      callStartTime: call.created_at,
+      callStartTime: callData.created_at,
     });
 
   } catch (error: any) {
