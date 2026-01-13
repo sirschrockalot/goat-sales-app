@@ -90,16 +90,21 @@ export default function AdminDashboard() {
       return;
     }
     
+    // IMPORTANT: Check user.is_admin directly, not just isAdmin from hook
+    // This prevents race conditions where isAdmin might be stale
+    const userIsAdmin = user?.is_admin || isAdmin;
+    
     // If we have a user but they're not admin, redirect
     // But give it a moment for refreshProfile to complete
-    if (user && !isAdmin) {
-      console.warn('Admin dashboard: User is not admin, redirecting. User:', user, 'isAdmin:', isAdmin);
+    if (user && !userIsAdmin) {
+      console.warn('Admin dashboard: User is not admin, redirecting. User:', user, 'isAdmin:', isAdmin, 'user.is_admin:', user.is_admin);
       console.warn('Profile data:', { userId: user.id, email: user.email, is_admin: user.is_admin });
       
       // Wait longer for profile refresh to complete (3 seconds)
       const timeoutId = setTimeout(() => {
-        // Double-check one more time before redirecting
-        if (!isAdmin) {
+        // Double-check one more time before redirecting - check both isAdmin and user.is_admin
+        const finalCheck = user?.is_admin || isAdmin;
+        if (!finalCheck) {
           console.error('Admin dashboard: Still not admin after waiting, redirecting to home');
           router.push('/');
         } else {
@@ -113,6 +118,16 @@ export default function AdminDashboard() {
     if (!authLoading && !user) {
       console.warn('Admin dashboard: No user found, redirecting to login');
       router.push('/login');
+    }
+    
+    // Log successful admin access
+    if (user && userIsAdmin) {
+      console.log('Admin dashboard: Admin access confirmed', { 
+        userId: user.id, 
+        email: user.email, 
+        isAdmin, 
+        userIsAdmin: user.is_admin 
+      });
     }
   }, [isAdmin, authLoading, router, user]);
 
@@ -234,9 +249,12 @@ export default function AdminDashboard() {
     );
   }
 
+  // Check admin status - use user.is_admin directly to avoid stale state
+  const userIsAdmin = user?.is_admin || isAdmin;
+  
   // If we have a user but isAdmin is false, wait a bit for profile refresh
   // Don't redirect immediately - give time for refreshProfile to complete
-  if (user && !isAdmin && !authLoading) {
+  if (user && !userIsAdmin && !authLoading) {
     // This will be handled by the useEffect redirect, but show a message first
     return (
       <div className="min-h-screen bg-[#0B0E14] text-white flex items-center justify-center">
@@ -245,7 +263,8 @@ export default function AdminDashboard() {
           <div className="text-amber-400 mb-2">Verifying admin access...</div>
           <div className="text-xs text-gray-500">
             User: {user.email}<br/>
-            Checking permissions...
+            Checking permissions...<br/>
+            isAdmin: {String(isAdmin)}, user.is_admin: {String(user.is_admin)}
           </div>
         </div>
       </div>
@@ -253,14 +272,14 @@ export default function AdminDashboard() {
   }
 
   // If not admin after waiting, show access denied (will redirect via useEffect)
-  if (!isAdmin && user && !authLoading) {
+  if (!userIsAdmin && user && !authLoading) {
     return (
       <div className="min-h-screen bg-[#0B0E14] text-white flex items-center justify-center">
         <div className="text-center">
           <div className="text-red-400 mb-4">Access Denied</div>
           <div className="text-gray-400">You don't have permission to view this page.</div>
           <div className="text-xs text-gray-500 mt-2">
-            User: {user.email}, is_admin: {String(user.is_admin)}
+            User: {user.email}, isAdmin: {String(isAdmin)}, user.is_admin: {String(user.is_admin)}
           </div>
         </div>
       </div>
