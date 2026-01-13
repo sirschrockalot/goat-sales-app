@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
 
     // Update call record with last_docusign_event
     if (data.callId) {
-      const { error: updateError } = await supabaseAdmin
+      const { error: updateError } = await (supabaseAdmin as any)
         .from('calls')
         .update({
           last_docusign_event: event,
