@@ -56,38 +56,21 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(new URL('/login', request.url), { status: 307 });
       }
 
+      // Use the same cookie reading logic as getUserFromRequest
       // Extract project ref from URL to build cookie name
       const url = new URL(supabaseUrl);
       const projectRef = url.hostname.split('.')[0] || 'localhost';
       const cookieName = `sb-${projectRef}-auth-token`;
       const cookieNameAlt = `sb-127.0.0.1-auth-token`;
       
-      // Get auth token from cookies (Supabase uses sb-<project-ref>-auth-token pattern)
-      // Also check for session cookies which may contain the token
+      // Get cookie value - try multiple cookie names
+      let cookieValue = request.cookies.get(cookieName)?.value || 
+                       request.cookies.get(cookieNameAlt)?.value ||
+                       request.cookies.get('sb-access-token')?.value ||
+                       request.cookies.get('supabase-auth-token')?.value;
+
       let accessToken: string | undefined;
-      
-      // Try primary cookie name
-      let cookieValue = request.cookies.get(cookieName)?.value;
-      
-      // Try alternative cookie names
-      if (!cookieValue) {
-        cookieValue = request.cookies.get(cookieNameAlt)?.value ||
-                      request.cookies.get('sb-access-token')?.value ||
-                      request.cookies.get('supabase-auth-token')?.value;
-      }
-      
-      // Try all cookies that might contain session data
-      if (!cookieValue) {
-        const allCookies = request.cookies.getAll();
-        for (const cookie of allCookies) {
-          if (cookie.name.includes('auth') || cookie.name.includes('session') || cookie.name.startsWith('sb-')) {
-            cookieValue = cookie.value;
-            console.log('Middleware: Found potential auth cookie:', cookie.name);
-            break;
-          }
-        }
-      }
-      
+
       if (cookieValue) {
         try {
           // Cookie value is JSON encoded session data
@@ -98,11 +81,33 @@ export async function middleware(request: NextRequest) {
           accessToken = cookieValue;
         }
       }
-      
+
       // Also check Authorization header
       const authHeader = request.headers.get('authorization');
       if (authHeader && authHeader.startsWith('Bearer ')) {
         accessToken = authHeader.replace('Bearer ', '');
+      }
+
+      // Fallback: Try to get from all cookies using regex (same as getUserFromRequest)
+      if (!accessToken) {
+        const allCookies = request.headers.get('cookie') || '';
+        const cookieMatch = allCookies.match(/sb-[^=]+-auth-token=([^;]+)/);
+        if (cookieMatch) {
+          try {
+            const sessionData = JSON.parse(decodeURIComponent(cookieMatch[1]));
+            accessToken = sessionData.access_token || sessionData.accessToken;
+          } catch {
+            accessToken = cookieMatch[1];
+          }
+        }
+      }
+
+      // Log available cookies for debugging
+      if (!accessToken) {
+        const allCookies = request.cookies.getAll();
+        const cookieNames = allCookies.map(c => c.name);
+        console.log('Middleware: No access token found. Available cookies:', cookieNames);
+        console.log('Middleware: Looking for cookie:', cookieName, 'or', cookieNameAlt);
       }
 
       if (!accessToken) {
@@ -191,10 +196,8 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(new URL('/', request.url), { status: 307 });
       }
       
-      // Log successful admin access for debugging
-      if (process.env.NODE_ENV === 'development') {
-        console.log('Middleware: Admin access granted', { userId: user.id, email: user.email, pathname });
-      }
+      // Log successful admin access for debugging (always log in production for troubleshooting)
+      console.log('Middleware: Admin access granted', { userId: user.id, email: user.email, pathname });
 
       // User is authenticated and is admin - allow access
       return NextResponse.next();
