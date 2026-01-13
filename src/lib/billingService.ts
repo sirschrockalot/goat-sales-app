@@ -860,15 +860,7 @@ export async function getVercelUsage(): Promise<VercelUsage> {
     // Heroku billing API endpoint (placeholder - implement Heroku billing API if needed)
     // For now, return empty usage data matching VercelUsage type
     // TODO: Implement Heroku billing API integration
-    return {
-      ...budgetInfo,
-      fluidComputeHours: 0,
-      bandwidthGB: 0,
-      fluidComputeCost: 0,
-      bandwidthCost: 0,
-      totalCost: 0,
-      withinBudget: true,
-    };
+    return budgetInfo;
 
     if (!response.ok) {
       // If API fails, estimate from webhook traffic
