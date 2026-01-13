@@ -62,6 +62,7 @@
     "dev:doppler": "doppler run -- npm run dev",
     "ignite": "EXPLICIT_ENV=sandbox tsx scripts/ignite-training.ts",
     "train:trigger": "tsx scripts/trigger-training-local.ts",
+    "train:direct": "EXPLICIT_ENV=sandbox tsx scripts/run-training-direct.ts",
     "train:test:vercel": "tsx scripts/test-training-vercel.ts",
     "seed:verify": "EXPLICIT_ENV=sandbox tsx scripts/verify-seed.ts",
     "seed:sandbox": "EXPLICIT_ENV=sandbox tsx scripts/seed-sandbox.ts",
