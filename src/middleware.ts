@@ -53,7 +53,7 @@ export async function middleware(request: NextRequest) {
             { status: 500 }
           );
         }
-        return NextResponse.redirect(new URL('/login', request.url));
+        return NextResponse.redirect(new URL('/login', request.url), { status: 307 });
       }
 
       // Extract project ref from URL to build cookie name
@@ -114,8 +114,11 @@ export async function middleware(request: NextRequest) {
             { status: 401 }
           );
         }
-        // Use 308 (permanent redirect) to avoid redirect loops with RSC requests
-        return NextResponse.redirect(new URL('/login', request.url), { status: 308 });
+        // Use 307 (temporary redirect) for login - 308 gets cached and prevents login
+        const response = NextResponse.redirect(new URL('/login', request.url), { status: 307 });
+        // Prevent caching of redirect
+        response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        return response;
       }
 
       // Verify session with Supabase
@@ -136,7 +139,7 @@ export async function middleware(request: NextRequest) {
             { status: 401 }
           );
         }
-        return NextResponse.redirect(new URL('/login', request.url));
+        return NextResponse.redirect(new URL('/login', request.url), { status: 307 });
       }
 
       // Check if user is admin
@@ -184,8 +187,8 @@ export async function middleware(request: NextRequest) {
           profileExists: !!profileData,
           isAdmin: profileData?.is_admin
         });
-        // Use 308 to avoid redirect loops with RSC requests
-        return NextResponse.redirect(new URL('/', request.url), { status: 308 });
+        // Use 307 (temporary) for non-admin redirect
+        return NextResponse.redirect(new URL('/', request.url), { status: 307 });
       }
       
       // Log successful admin access for debugging
@@ -203,7 +206,7 @@ export async function middleware(request: NextRequest) {
           { status: 500 }
         );
       }
-      return NextResponse.redirect(new URL('/login', request.url), { status: 308 });
+        return NextResponse.redirect(new URL('/login', request.url), { status: 307 });
     }
   }
 
@@ -212,7 +215,7 @@ export async function middleware(request: NextRequest) {
     try {
       if (!supabaseUrl || !supabaseAnonKey) {
         console.error('Supabase environment variables not configured');
-        return NextResponse.redirect(new URL('/login', request.url));
+        return NextResponse.redirect(new URL('/login', request.url), { status: 307 });
       }
 
       // Extract project ref from URL to build cookie name
@@ -244,7 +247,7 @@ export async function middleware(request: NextRequest) {
       }
 
       if (!accessToken) {
-        return NextResponse.redirect(new URL('/login', request.url), { status: 308 });
+        return NextResponse.redirect(new URL('/login', request.url), { status: 307 });
       }
 
       // Verify session with Supabase
@@ -259,14 +262,14 @@ export async function middleware(request: NextRequest) {
       const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken);
 
       if (authError || !user) {
-        return NextResponse.redirect(new URL('/login', request.url), { status: 308 });
+        return NextResponse.redirect(new URL('/login', request.url), { status: 307 });
       }
 
       // User is authenticated - allow access to gauntlet
       return NextResponse.next();
     } catch (error) {
       console.error('Middleware auth error for gauntlet', { error });
-      return NextResponse.redirect(new URL('/login', request.url), { status: 308 });
+      return NextResponse.redirect(new URL('/login', request.url), { status: 307 });
     }
   }
 
