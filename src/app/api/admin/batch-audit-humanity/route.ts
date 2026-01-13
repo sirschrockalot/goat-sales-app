@@ -140,7 +140,7 @@ async function checkAndInjectFeedback(humanityGrade: number): Promise<boolean> {
   const textureFrequencyIncrease = 0.1;
   
   if (supabaseAdmin) {
-    await supabaseAdmin
+    await (supabaseAdmin as any)
       .from('sandbox_config')
       .upsert({
         key: 'acoustic_texture_frequency',
