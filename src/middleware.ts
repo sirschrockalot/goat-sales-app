@@ -78,10 +78,11 @@ export async function middleware(request: NextRequest) {
       
       // Try all cookies that might contain session data
       if (!cookieValue) {
-        for (const [name, cookie] of request.cookies.entries()) {
-          if (name.includes('auth') || name.includes('session') || name.startsWith('sb-')) {
+        const allCookies = request.cookies.getAll();
+        for (const cookie of allCookies) {
+          if (cookie.name.includes('auth') || cookie.name.includes('session') || cookie.name.startsWith('sb-')) {
             cookieValue = cookie.value;
-            console.log('Middleware: Found potential auth cookie:', name);
+            console.log('Middleware: Found potential auth cookie:', cookie.name);
             break;
           }
         }
