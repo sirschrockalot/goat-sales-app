@@ -87,6 +87,7 @@ export async function middleware(request: NextRequest) {
       }
 
       if (!accessToken) {
+        console.warn('Middleware: No access token found for admin route', { pathname });
         // Redirect to login for admin routes, return 401 for API routes
         if (pathname.startsWith('/api/')) {
           return NextResponse.json(
@@ -94,7 +95,8 @@ export async function middleware(request: NextRequest) {
             { status: 401 }
           );
         }
-        return NextResponse.redirect(new URL('/login', request.url));
+        // Use 308 (permanent redirect) to avoid redirect loops with RSC requests
+        return NextResponse.redirect(new URL('/login', request.url), { status: 308 });
       }
 
       // Verify session with Supabase
@@ -163,7 +165,8 @@ export async function middleware(request: NextRequest) {
           profileExists: !!profileData,
           isAdmin: profileData?.is_admin
         });
-        return NextResponse.redirect(new URL('/', request.url));
+        // Use 308 to avoid redirect loops with RSC requests
+        return NextResponse.redirect(new URL('/', request.url), { status: 308 });
       }
       
       // Log successful admin access for debugging
@@ -181,7 +184,7 @@ export async function middleware(request: NextRequest) {
           { status: 500 }
         );
       }
-      return NextResponse.redirect(new URL('/login', request.url));
+      return NextResponse.redirect(new URL('/login', request.url), { status: 308 });
     }
   }
 
@@ -222,7 +225,7 @@ export async function middleware(request: NextRequest) {
       }
 
       if (!accessToken) {
-        return NextResponse.redirect(new URL('/login', request.url));
+        return NextResponse.redirect(new URL('/login', request.url), { status: 308 });
       }
 
       // Verify session with Supabase
@@ -237,14 +240,14 @@ export async function middleware(request: NextRequest) {
       const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken);
 
       if (authError || !user) {
-        return NextResponse.redirect(new URL('/login', request.url));
+        return NextResponse.redirect(new URL('/login', request.url), { status: 308 });
       }
 
       // User is authenticated - allow access to gauntlet
       return NextResponse.next();
     } catch (error) {
       console.error('Middleware auth error for gauntlet', { error });
-      return NextResponse.redirect(new URL('/login', request.url));
+      return NextResponse.redirect(new URL('/login', request.url), { status: 308 });
     }
   }
 
