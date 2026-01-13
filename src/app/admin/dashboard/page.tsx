@@ -234,13 +234,34 @@ export default function AdminDashboard() {
     );
   }
 
-  // If not admin, show access denied (will redirect via useEffect)
-  if (!isAdmin) {
+  // If we have a user but isAdmin is false, wait a bit for profile refresh
+  // Don't redirect immediately - give time for refreshProfile to complete
+  if (user && !isAdmin && !authLoading) {
+    // This will be handled by the useEffect redirect, but show a message first
+    return (
+      <div className="min-h-screen bg-[#0B0E14] text-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <div className="text-amber-400 mb-2">Verifying admin access...</div>
+          <div className="text-xs text-gray-500">
+            User: {user.email}<br/>
+            Checking permissions...
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // If not admin after waiting, show access denied (will redirect via useEffect)
+  if (!isAdmin && user && !authLoading) {
     return (
       <div className="min-h-screen bg-[#0B0E14] text-white flex items-center justify-center">
         <div className="text-center">
           <div className="text-red-400 mb-4">Access Denied</div>
           <div className="text-gray-400">You don't have permission to view this page.</div>
+          <div className="text-xs text-gray-500 mt-2">
+            User: {user.email}, is_admin: {String(user.is_admin)}
+          </div>
         </div>
       </div>
     );
