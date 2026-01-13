@@ -415,7 +415,7 @@ Return a JSON object with:
     score.technicalAssistance = 0;
   }
   if (score.documentStatus === undefined) {
-    score.documentStatus = null;
+    score.documentStatus = undefined;
   }
   
   // Calculate total score: Math Defense (25%), Humanity (25%), Success (25%), Margin Integrity (25%)
