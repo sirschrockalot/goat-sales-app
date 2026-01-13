@@ -92,63 +92,59 @@ EMAIL_FROM=noreply@yourdomain.com
 
 ---
 
-### Step 2: Deploy to Vercel
+### Step 2: Deploy to Heroku
 
-#### Option A: Via Vercel CLI (Recommended)
+#### Option A: Via Heroku CLI (Recommended)
 
 ```bash
-# Install Vercel CLI
-npm i -g vercel
+# Install Heroku CLI
+# macOS: brew tap heroku/brew && brew install heroku
+# Or download from: https://devcenter.heroku.com/articles/heroku-cli
 
 # Login
-vercel login
+heroku login
 
-# Link project (if not already linked)
-vercel link
+# Create app (if not already created)
+heroku create your-app-name
 
 # Deploy to production
-vercel --prod
+git push heroku main
 ```
 
-#### Option B: Via GitHub
+#### Option B: Via GitHub Integration
 
 1. Push code to GitHub
-2. Go to Vercel Dashboard → Add New Project
-3. Import your repository
-4. Vercel auto-detects Next.js
-
-#### Option C: Via Vercel Dashboard
-
-1. Vercel Dashboard → Add New Project
-2. Import from Git or upload
-3. Configure (auto-detected for Next.js)
+2. Go to Heroku Dashboard → Create New App
+3. Connect GitHub repository
+4. Enable automatic deploys from main branch
 
 ---
 
 ### Step 3: Verify Deployment
 
 #### Check Build Status
-- [ ] Go to Vercel Dashboard → Deployments
+- [ ] Go to Heroku Dashboard → Your App → Activity
 - [ ] Verify build succeeded (green checkmark)
-- [ ] Review build logs for errors
+- [ ] Review build logs for errors: `heroku logs --tail -a your-app-name`
 
-#### Test Cron Jobs
-After deployment, cron jobs auto-configure. Verify:
+#### Set Up Cron Jobs (Heroku Scheduler)
+After deployment, set up scheduled jobs:
 
-1. Go to **Vercel Dashboard → Your Project → Cron Jobs**
-2. You should see 5 cron jobs:
-   - `/api/cron/train` (every 30 min)
-   - `/api/cron/scout-scan` (every 5 min)
-   - `/api/cron/daily-audit` (daily 8 AM UTC)
-   - `/api/cron/nightly-evolution` (daily 2 AM UTC)
-   - `/api/cron/daily-recap` (daily 8 AM UTC)
+1. Add Heroku Scheduler addon: `heroku addons:create scheduler:standard`
+2. Open scheduler: `heroku addons:open scheduler`
+3. Add scheduled jobs:
+   - `/api/cron/train` (every 30 min): `curl -X GET https://your-app.herokuapp.com/api/cron/train -H "Authorization: Bearer $CRON_SECRET"`
+   - `/api/cron/scout-scan` (every 5 min): `curl -X GET https://your-app.herokuapp.com/api/cron/scout-scan -H "Authorization: Bearer $CRON_SECRET"`
+   - `/api/cron/daily-audit` (daily 8 AM UTC): `curl -X GET https://your-app.herokuapp.com/api/cron/daily-audit -H "Authorization: Bearer $CRON_SECRET"`
+   - `/api/cron/nightly-evolution` (daily 2 AM UTC): `curl -X GET https://your-app.herokuapp.com/api/cron/nightly-evolution -H "Authorization: Bearer $CRON_SECRET"`
+   - `/api/cron/daily-recap` (daily 8 AM UTC): `curl -X GET https://your-app.herokuapp.com/api/cron/daily-recap -H "Authorization: Bearer $CRON_SECRET"`
 
-3. Check execution logs for each cron job
+4. Check execution logs: `heroku logs --tail -a your-app-name | grep cron`
 
 #### Test Manually (Optional)
 ```bash
 # Replace with your domain and cron secret
-curl -X POST https://your-app.vercel.app/api/cron/train \
+curl -X POST https://your-app.herokuapp.com/api/cron/train \
   -H "Authorization: Bearer YOUR_CRON_SECRET" \
   -H "Content-Type: application/json"
 ```
@@ -159,7 +155,7 @@ curl -X POST https://your-app.vercel.app/api/cron/train \
 
 After deployment, access at:
 ```
-https://your-app.vercel.app
+https://your-app.herokuapp.com
 ```
 
 **Dashboard Routes:**
@@ -197,14 +193,16 @@ https://your-app.vercel.app
 - Verify all dependencies in `package.json`
 
 ### Cron Jobs Not Running
-- Verify `vercel.json` is committed
-- Check Vercel Dashboard → Cron Jobs for errors
-- Verify `CRON_SECRET` is set correctly
+- Verify Heroku Scheduler is configured
+- Check Heroku Scheduler dashboard for errors
+- Verify `CRON_SECRET` is set correctly: `heroku config:get CRON_SECRET`
 - Check cron route handlers for errors
+- View logs: `heroku logs --tail -a your-app-name | grep cron`
 
 ### Environment Variables Not Working
-- Verify variables set for **Production** environment
-- Redeploy after adding new variables
+- Verify variables set in Heroku: `heroku config -a your-app-name`
+- Set variables: `heroku config:set KEY=value -a your-app-name`
+- Redeploy after adding new variables: `git push heroku main`
 - Check variable names match exactly (case-sensitive)
 - Verify no typos in values
 
@@ -212,7 +210,7 @@ https://your-app.vercel.app
 - Verify Supabase URLs and keys are correct
 - Check Supabase Dashboard → Settings → API
 - Verify RLS policies allow service_role access
-- Check network connectivity from Vercel
+- Check network connectivity from Heroku
 
 ---
 
@@ -232,8 +230,8 @@ https://your-app.vercel.app
 
 After successful deployment:
 
-1. **Monitor Cron Jobs**: Check Vercel Dashboard regularly
-2. **Review Logs**: Monitor for errors or issues
+1. **Monitor Cron Jobs**: Check Heroku Scheduler dashboard regularly
+2. **Review Logs**: Monitor for errors: `heroku logs --tail -a your-app-name`
 3. **Test Training**: Trigger a training session via dashboard
 4. **Set Up Alerts**: Configure Slack/Twilio for notifications
 5. **Optimize**: Review performance and costs
@@ -242,7 +240,7 @@ After successful deployment:
 
 ## 📚 Additional Resources
 
-- Full deployment guide: `VERCEL_DEPLOYMENT_GUIDE.md`
+- Heroku migration guide: `HEROKU_MIGRATION_GUIDE.md`
 - Production deployment: `docs/DEPLOYMENT_PRODUCTION.md`
 - Environment setup: `docs/ENVIRONMENT_PARITY.md`
 

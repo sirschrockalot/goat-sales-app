@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Setup Automated Training Schedule
-# Configures cron job to run training every 30 minutes
+# Configures cron job to run training every 15 minutes (Aggressive: 480 battles/day)
 
 set -e
 
@@ -39,8 +39,8 @@ EOF
 
 chmod +x "$CRON_WRAPPER"
 
-# Create cron entry (every 30 minutes)
-CRON_SCHEDULE="*/30 * * * *"
+# Create cron entry (every 15 minutes - Aggressive training for faster improvement)
+CRON_SCHEDULE="*/15 * * * *"
 CRON_COMMAND="$CRON_WRAPPER"
 
 # Check if cron job already exists
@@ -72,10 +72,16 @@ fi
 
 echo ""
 echo "📋 Training Schedule Configuration:"
-echo "   Frequency: Every 30 minutes"
+echo "   Frequency: Every 15 minutes (AGGRESSIVE MODE)"
 echo "   Batch Size: 5 battles per batch"
-echo "   Daily Battles: ~240 battles (48 batches)"
+echo "   Daily Battles: ~480 battles (96 batches)"
+echo "   Daily Cost: ~$3.00-6.00"
+echo "   Monthly Cost: ~$90-180"
 echo "   Log File: $CRON_LOG_DIR/cron-training.log"
+echo "   Time Zone: CST (Central Standard Time)"
+echo ""
+echo "📅 Schedule: Runs every 15 minutes at :00, :15, :30, :45 (CST)"
+echo "   ⚡ Accelerated training for faster world-class status (2-3 months vs 3-4 months)"
 echo ""
 echo "📝 Current crontab:"
 crontab -l | grep -A 1 -B 1 "$CRON_WRAPPER" || crontab -l

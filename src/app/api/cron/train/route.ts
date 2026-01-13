@@ -1,6 +1,7 @@
 /**
- * Vercel Cron Job: Autonomous Training
+ * Cron Job: Autonomous Training
  * Triggers autonomous battle loop with concurrency control
+ * Can be triggered by Heroku Scheduler or manual API calls
  */
 
 import { NextRequest, NextResponse } from 'next/server';

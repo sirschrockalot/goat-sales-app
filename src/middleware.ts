@@ -31,7 +31,7 @@ export async function middleware(request: NextRequest) {
       );
     }
 
-    // Vercel Cron sends Authorization header with Bearer token
+    // Cron jobs require Authorization header with Bearer token
     if (authHeader !== `Bearer ${cronSecret}`) {
       return NextResponse.json(
         { error: 'Unauthorized' },

@@ -503,7 +503,7 @@ export default function BillingDashboard() {
           </div>
         </motion.div>
 
-        {/* Vercel Fluid Compute */}
+        {/* Heroku Hosting */}
         <motion.div
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
@@ -519,7 +519,7 @@ export default function BillingDashboard() {
                 }`} />
               </div>
               <div>
-                <h3 className="font-semibold text-white">Vercel Fluid Compute</h3>
+                <h3 className="font-semibold text-white">Heroku Hosting</h3>
                 <p className="text-xs text-gray-400">Monthly Infrastructure</p>
               </div>
             </div>
@@ -536,7 +536,7 @@ export default function BillingDashboard() {
           </div>
           <div className="space-y-2 text-sm">
             <div className="flex items-center justify-between">
-              <span className="text-gray-400">Compute Hours</span>
+              <span className="text-gray-400">Dyno Hours</span>
               <span className="text-white">{infrastructure.vercel.fluidComputeHours.toFixed(2)}</span>
             </div>
             <div className="flex items-center justify-between">

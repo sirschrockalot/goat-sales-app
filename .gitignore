@@ -29,8 +29,8 @@ yarn-error.log*
 .env.production
 .env.development
 
-# Vercel
-.vercel
+# Heroku
+.heroku
 
 # TypeScript
 *.tsbuildinfo

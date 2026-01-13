@@ -1,6 +1,6 @@
 /**
  * Rate Limiting Utility
- * Uses Upstash Redis or Vercel KV for rate limiting
+ * Uses Upstash Redis for rate limiting
  * Falls back to in-memory rate limiting in development
  */
 
@@ -22,7 +22,7 @@ interface RateLimitResult {
 const memoryStore = new Map<string, { count: number; reset: number }>();
 
 /**
- * Rate limit check using Upstash Redis or Vercel KV
+ * Rate limit check using Upstash Redis
  * Falls back to in-memory store if not configured
  */
 export async function rateLimit(
@@ -135,7 +135,7 @@ function parseWindow(window: string): number {
  * Get client IP from request
  */
 export function getClientIP(request: Request): string {
-  // Try various headers (Vercel, Cloudflare, etc.)
+  // Try various headers (Heroku, Cloudflare, etc.)
   const forwarded = request.headers.get('x-forwarded-for');
   if (forwarded) {
     return forwarded.split(',')[0].trim();

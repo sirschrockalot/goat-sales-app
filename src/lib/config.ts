@@ -72,13 +72,13 @@ export function getAppConfig(): AppConfig {
 }
 
 /**
- * Check if running in cloud environment (Vercel)
+ * Check if running in cloud environment (Heroku)
  */
 export function isCloudEnvironment(): boolean {
   return !!(
-    process.env.VERCEL ||
-    process.env.VERCEL_ENV ||
-    process.env.NEXT_PUBLIC_VERCEL_URL
+    process.env.DYNO || // Heroku dyno indicator
+    process.env.HEROKU_APP_NAME ||
+    process.env.NODE_ENV === 'production'
   );
 }
 

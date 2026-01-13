@@ -69,7 +69,6 @@
     "train:schedule:stop": "crontab -l 2>/dev/null | grep -v 'run-training-cron.sh' | crontab - && echo '✅ Training schedule stopped'",
     "train:schedule:status": "crontab -l 2>/dev/null | grep 'run-training-cron.sh' || echo '❌ No training schedule found'",
     "train:schedule:logs": "tail -f logs/cron-training.log",
-    "train:test:vercel": "tsx scripts/test-training-vercel.ts",
     "seed:verify": "EXPLICIT_ENV=sandbox tsx scripts/verify-seed.ts",
     "seed:sandbox": "EXPLICIT_ENV=sandbox tsx scripts/seed-sandbox.ts",
     "seed:instructions": "tsx scripts/execute-seed-via-dashboard.ts",

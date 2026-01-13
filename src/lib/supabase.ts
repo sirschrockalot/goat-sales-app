@@ -51,7 +51,7 @@ export const createSupabaseClient = () => {
   }
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    const error = 'Missing client-side Supabase environment variables (NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY). Please configure these in your Vercel project settings.';
+    const error = 'Missing client-side Supabase environment variables (NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY). Please configure these in your Heroku environment variables.';
     // Use console for client-safe error logging
     console.error('Supabase client creation error', { 
       hasUrl: !!supabaseUrl, 

@@ -5,7 +5,7 @@
  */
 
 import OpenAI from 'openai';
-import { supabaseAdmin } from '@/lib/supabase';
+import { getSupabaseClientForEnv } from '@/lib/env-manager';
 import { getEnvironmentConfig, validateEnvironmentConfig, assertNotProduction } from '@/lib/env-manager';
 import logger from '@/lib/logger';
 import { injectTextures, getTextureInjectionProbability } from '@/lib/acousticTextures';
@@ -41,10 +41,12 @@ export interface RefereeScore {
   mathDefense: number; // 0-10: Did they stay at $82,700?
   humanity: number; // 0-10: Did they use disfluencies (uh, um, sighs)?
   success: number; // 0-10: Did they get verbal "Yes" to Memorandum (Clause 17)?
+  marginIntegrity: number; // 0-100: Weighted margin preservation score
   totalScore: number; // 0-100
   feedback: string;
   verbalYesToMemorandum: boolean;
   winningRebuttal?: string;
+  calculatedProfit?: number; // Profit calculated from transcript (ARV - Price - Repairs - Closing)
 }
 
 /**
@@ -300,11 +302,31 @@ GRADING CRITERIA:
    - Did they close the deal?
    - Score: 10 = Got verbal yes to Memorandum, 0 = No agreement
 
+4. MARGIN INTEGRITY (0-100 points - Weighted Score):
+   Calculate the profit from the deal: Profit = ARV - Purchase Price - Repairs - Closing Costs (3% of purchase price)
+   
+   Extract from transcript:
+   - ARV (After Repair Value) mentioned
+   - Final agreed purchase price
+   - Estimated repairs mentioned
+   - Calculate: Closing Costs = Purchase Price × 0.03
+   - Calculate: Profit = ARV - Purchase Price - Repairs - Closing Costs
+   
+   Score based on profit:
+   - 100 points: Profit ≥ $15,000 (Green Zone - Apex Achievement)
+   - 85 points: Profit $12,000 - $14,999 (Strong Deal)
+   - 70 points: Profit $8,000 - $11,999 (Yellow Zone - Acceptable/Volume Deal)
+   - 0 points: Profit < $8,000 (Red Zone - Failing Grade/Loss of Discipline)
+   
+   If profit cannot be calculated from transcript, set marginIntegrity to 0 and note in feedback.
+
 Return a JSON object with:
 {
   "mathDefense": <0-10>,
   "humanity": <0-10>,
   "success": <0-10>,
+  "marginIntegrity": <0-100>,
+  "calculatedProfit": <number or null>,
   "totalScore": <0-100>,
   "feedback": "<detailed feedback>",
   "verbalYesToMemorandum": <true/false>,
@@ -356,7 +378,21 @@ Return a JSON object with:
   }
 
   const score = JSON.parse(response) as RefereeScore;
-  score.totalScore = Math.round(score.mathDefense * 3.33 + score.humanity * 3.33 + score.success * 3.34);
+  
+  // Ensure marginIntegrity is set (default to 0 if missing)
+  if (score.marginIntegrity === undefined) {
+    score.marginIntegrity = 0;
+  }
+  
+  // Calculate total score: Math Defense (25%), Humanity (25%), Success (25%), Margin Integrity (25%)
+  // Margin integrity is already on 0-100 scale, so divide by 4
+  const marginWeight = (score.marginIntegrity || 0) / 4;
+  score.totalScore = Math.round(
+    score.mathDefense * 2.5 + 
+    score.humanity * 2.5 + 
+    score.success * 2.5 + 
+    marginWeight
+  );
 
   return score;
 }
@@ -386,18 +422,18 @@ export async function runBattle(
     logger.warn('Budget throttling active - using GPT-4o-Mini only and disabling Vocal Soul Auditor');
   }
 
-  if (!supabaseAdmin) {
-    throw new Error('Supabase admin client not available');
-  }
+  // Get environment-specific Supabase client
+  const supabaseClient = getSupabaseClientForEnv(config.environment as 'sandbox' | 'local' | 'prod');
 
-  const { data: persona, error: personaError } = await supabaseAdmin
+  // Fetch persona from sandbox_personas (required for foreign key in sandbox_battles)
+  const { data: persona, error: personaError } = await supabaseClient
     .from('sandbox_personas')
     .select('*')
     .eq('id', personaId)
     .single();
 
   if (personaError || !persona) {
-    throw new Error(`Persona not found: ${personaId}`);
+    throw new Error(`Persona not found in sandbox_personas: ${personaId}`);
   }
 
   logger.info('Starting autonomous battle', { persona: (persona as any).name });
@@ -466,25 +502,38 @@ export async function runBattle(
 
   // Save battle to database
   // Ensure all integer fields are properly rounded
-  const { data: battle, error: battleError } = await (supabaseAdmin as any)
+  // Reuse the supabaseClient from earlier in the function (line 426)
+  // Build insert object with optional columns (for backward compatibility)
+  const battleData: any = {
+    persona_id: personaId,
+    closer_thread_id: closerThreadId,
+    persona_thread_id: personaThreadId,
+    transcript: transcript,
+    referee_score: Math.round(score.totalScore), // Ensure integer
+    referee_feedback: score.feedback,
+    math_defense_score: Math.round(score.mathDefense), // Ensure integer
+    humanity_score: Math.round(score.humanity), // Ensure integer
+    success_score: Math.round(score.success), // Ensure integer
+    verbal_yes_to_memorandum: score.verbalYesToMemorandum,
+    winning_rebuttal: score.winningRebuttal || null,
+    turns: battleState.turn,
+    token_usage: battleState.tokenUsage.total,
+    cost_usd: battleState.costUsd,
+    ended_at: new Date().toISOString(),
+  };
+  
+  // Add optional columns if they exist in the score (for databases with margin integrity migration)
+  // Only include if the score has these values to avoid errors on databases without the migration
+  if (score.marginIntegrity !== undefined && score.marginIntegrity !== null) {
+    battleData.margin_integrity = Math.round(score.marginIntegrity || 0);
+  }
+  if (score.calculatedProfit !== undefined && score.calculatedProfit !== null) {
+    battleData.calculated_profit = score.calculatedProfit;
+  }
+  
+  const { data: battle, error: battleError } = await (supabaseClient as any)
     .from('sandbox_battles')
-    .insert({
-      persona_id: personaId,
-      closer_thread_id: closerThreadId,
-      persona_thread_id: personaThreadId,
-      transcript: transcript,
-      referee_score: Math.round(score.totalScore), // Ensure integer
-      referee_feedback: score.feedback,
-      math_defense_score: Math.round(score.mathDefense), // Ensure integer
-      humanity_score: Math.round(score.humanity), // Ensure integer
-      success_score: Math.round(score.success), // Ensure integer
-      verbal_yes_to_memorandum: score.verbalYesToMemorandum,
-      winning_rebuttal: score.winningRebuttal || null,
-      turns: battleState.turn,
-      token_usage: battleState.tokenUsage.total,
-      cost_usd: battleState.costUsd,
-      ended_at: new Date().toISOString(),
-    } as any)
+    .insert(battleData)
     .select()
     .single();
 
@@ -582,14 +631,15 @@ export async function runBattleLoop(
   validateEnvironmentConfig(config);
   assertNotProduction(); // Ensure we're not in production
 
-  if (!supabaseAdmin) {
-    throw new Error('Supabase admin client not available');
-  }
+  // Get environment-specific Supabase client (supports sandbox/local/prod)
+  const supabaseAdmin = getSupabaseClientForEnv(config.environment as 'sandbox' | 'local' | 'prod');
 
   const batchSize = options?.batchSize || maxBattles || 10;
   const maxConcurrent = options?.maxConcurrent || 3;
   const delayBetweenBattles = options?.delayBetweenBattles || 1000;
 
+  // Fetch personas from sandbox_personas (which is what sandbox_battles references)
+  // If sandbox_personas is empty, we'll need to sync from training_personas first
   let personas;
   if (personaIds && personaIds.length > 0) {
     const { data, error } = await supabaseAdmin
@@ -609,6 +659,24 @@ export async function runBattleLoop(
 
     if (error) throw error;
     personas = data;
+    
+    // If no sandbox_personas found, try to sync from training_personas
+    if (!personas || personas.length === 0) {
+      console.log('[TRAINING] No sandbox_personas found, checking training_personas...');
+      const { data: trainingPersonas, error: trainingError } = await supabaseAdmin
+        .from('training_personas')
+        .select('id, name')
+        .eq('is_active', true)
+        .limit(batchSize);
+      
+      if (trainingError) throw trainingError;
+      
+      if (trainingPersonas && trainingPersonas.length > 0) {
+        console.log(`[TRAINING] Found ${trainingPersonas.length} training_personas, but need sandbox_personas`);
+        console.log('[TRAINING] Please run seed.sql to sync training_personas to sandbox_personas');
+        throw new Error('sandbox_personas table is empty. Run seed.sql to sync personas.');
+      }
+    }
   }
 
   if (!personas || personas.length === 0) {

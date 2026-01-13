@@ -8,7 +8,7 @@ This document describes all the ways to trigger autonomous AI model training in 
 
 The training system runs autonomous battles between your AI closer and various seller personas to improve performance. Training can be triggered through multiple methods:
 
-1. **Automated (Vercel Cron)** - Scheduled execution
+1. **Automated (Heroku Scheduler)** - Scheduled execution
 2. **Manual API Call** - Direct HTTP request
 3. **Local Development Script** - For local testing
 4. **Ignition Script** - Initial training setup
@@ -16,29 +16,31 @@ The training system runs autonomous battles between your AI closer and various s
 
 ---
 
-## 1. Automated Training (Vercel Cron)
+## 1. Automated Training (Heroku Scheduler)
 
 ### How It Works
 
-Training runs automatically on a schedule configured in `vercel.json`:
+Training runs automatically on a schedule configured in Heroku Scheduler. Set up scheduled jobs via the Heroku Dashboard or CLI.
 
-```json
-{
-  "crons": [
-    {
-      "path": "/api/cron/train",
-      "schedule": "0 14 * * *"  // Daily at 2 PM UTC
-    }
-  ]
-}
-```
+**Recommended Schedule**: Every 30 minutes (`*/30 * * * *`) or daily at 2:00 PM UTC (`0 14 * * *`)
 
-**Current Schedule**: Daily at 2:00 PM UTC (14:00)
+### Setting Up Heroku Scheduler
+
+1. **Via Heroku Dashboard**:
+   - Go to your Heroku app → Resources
+   - Add "Heroku Scheduler" addon
+   - Create a new job with command: `curl -X GET https://your-app.herokuapp.com/api/cron/train -H "Authorization: Bearer $CRON_SECRET"`
+   - Set the schedule (e.g., `*/30 * * * *` for every 30 minutes)
+
+2. **Via Heroku CLI**:
+   ```bash
+   heroku addons:create scheduler:standard
+   heroku addons:open scheduler
+   ```
 
 ### Customizing the Schedule
 
-Edit `vercel.json` to change the cron schedule:
-
+In Heroku Scheduler, you can set:
 - **Every 30 minutes**: `*/30 * * * *`
 - **Every hour**: `0 * * * *`
 - **Every 6 hours**: `0 */6 * * *`
@@ -47,8 +49,8 @@ Edit `vercel.json` to change the cron schedule:
 
 ### Requirements
 
-- `CRON_SECRET` environment variable must be set in Vercel
-- Vercel automatically sends `Authorization: Bearer ${CRON_SECRET}` header
+- `CRON_SECRET` environment variable must be set in Heroku
+- Heroku Scheduler command must include `Authorization: Bearer ${CRON_SECRET}` header
 - Endpoint: `GET /api/cron/train`
 
 ### Batch Size
@@ -61,12 +63,12 @@ Default batch size is controlled by:
 
 ## 2. Manual API Trigger
 
-### Production (Vercel)
+### Production (Heroku)
 
 Trigger training manually via HTTP POST request:
 
 ```bash
-curl -X POST https://your-app.vercel.app/api/cron/train \
+curl -X POST https://your-app.herokuapp.com/api/cron/train \
   -H "Authorization: Bearer YOUR_CRON_SECRET" \
   -H "Content-Type: application/json" \
   -d '{"batchSize": 5}'
@@ -86,7 +88,7 @@ curl -X POST http://localhost:3000/api/cron/train \
 ### Authentication
 
 - **Required Header**: `Authorization: Bearer ${CRON_SECRET}`
-- Get `CRON_SECRET` from your `.env.local` file or Vercel environment variables
+- Get `CRON_SECRET` from your `.env.local` file or Heroku environment variables
 - Without correct authentication, you'll receive `401 Unauthorized`
 
 ### Response Format
@@ -288,8 +290,8 @@ TRAINING_BATCH_SIZE=3
    - Battle results and scores
    - Breakthrough notifications
 
-2. **Vercel Logs** (Production):
-   - Go to Vercel Dashboard → Your Project → Logs
+2. **Heroku Logs** (Production):
+   - Run: `heroku logs --tail -a your-app-name`
    - Filter by `/api/cron/train`
    - View execution history and errors
 
@@ -325,7 +327,7 @@ CRON_SECRET=generated-secret-here
 **Solutions**:
 - Reduce `TRAINING_BATCH_SIZE`
 - Reduce `MAX_CONCURRENT_BATTLES`
-- Increase `MAX_TRAINING_EXECUTION_TIME_MS` (if on Vercel Pro plan)
+- Increase `MAX_TRAINING_EXECUTION_TIME_MS` (if needed for longer battles)
 
 ### "No active personas found"
 
@@ -369,7 +371,7 @@ npm run dev
 
 | Method | Use Case | Command |
 |--------|----------|---------|
-| **Automated Cron** | Production scheduling | Configured in `vercel.json` |
+| **Automated Scheduler** | Production scheduling | Configured in Heroku Scheduler |
 | **Manual API** | On-demand production trigger | `curl -X POST ...` |
 | **Local Script** | Development testing | `npm run train:trigger` |
 | **Ignition** | Initial setup | `npm run ignite` |

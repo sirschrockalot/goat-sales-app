@@ -10,8 +10,8 @@ async function verifySeed(): Promise<void> {
   console.log('🔍 Verifying Sandbox seed data...\n');
 
   try {
-    // Use SANDBOX environment
-    const supabase = getSupabaseClientForEnv('sandbox');
+    // Use LOCAL environment for verification (seed.sql runs on local)
+    const supabase = getSupabaseClientForEnv('local');
 
     // Check training_personas table
     const { data: personas, error: personasError, count } = await supabase
@@ -35,10 +35,31 @@ async function verifySeed(): Promise<void> {
       process.exit(1);
     }
 
-    if (personaCount < 15) {
-      console.log(`\n⚠️  Expected 15 personas, found ${personaCount}. Seed may be incomplete.`);
+    if (personaCount < 50) {
+      console.log(`\n⚠️  Expected 50 personas, found ${personaCount}. Seed may be incomplete.`);
     } else {
-      console.log('✅ All 15 Principal Partner personas found!');
+      console.log('✅ All 50 Killer Personas found!');
+    }
+
+    // Check margin pressure traits
+    const { data: marginData, error: marginError } = await supabase
+      .from('training_personas')
+      .select('negotiation_style, target_profit_zone, lowest_acceptable_price')
+      .not('negotiation_style', 'is', null);
+
+    if (!marginError && marginData) {
+      const yellowZoneCount = marginData.filter((p: any) => p.target_profit_zone === 'yellow').length;
+      const grinderCount = marginData.filter((p: any) => p.negotiation_style === 'grinder').length;
+      const fairValueCount = marginData.filter((p: any) => p.negotiation_style === 'fair_value').length;
+      
+      console.log(`\n📊 Margin Pressure Traits:`);
+      console.log(`   Yellow Zone Personas: ${yellowZoneCount} (target: 18, ${Math.round(yellowZoneCount/50*100)}%)`);
+      console.log(`   Grinder Style: ${grinderCount}`);
+      console.log(`   Fair Value Style: ${fairValueCount}`);
+      
+      if (yellowZoneCount >= 18) {
+        console.log('   ✅ Yellow Zone coverage meets target (35%+)');
+      }
     }
 
     // List persona names
@@ -69,7 +90,9 @@ async function verifySeed(): Promise<void> {
 
     console.log('\n✅ Seed verification complete!');
     
-    if (personaCount >= 15) {
+    if (personaCount >= 50) {
+      console.log('🎉 All 50 Killer Personas loaded! Sandbox is ready for tiered profit zone training!');
+    } else if (personaCount >= 15) {
       console.log('🎉 Sandbox is ready for autonomous training!');
     }
 

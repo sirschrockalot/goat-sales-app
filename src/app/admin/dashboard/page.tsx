@@ -21,7 +21,9 @@ import {
   BarChart3,
   UserPlus,
   Mail,
-  Send
+  Send,
+  Activity,
+  Home
 } from 'lucide-react';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { useAuth } from '@/contexts/AuthContext';
@@ -316,8 +318,30 @@ export default function AdminDashboard() {
             <ArrowLeft className="w-4 h-4" />
             Back to Home
           </button>
-          <h1 className="text-4xl font-bold mb-2">Manager Dashboard</h1>
-          <p className="text-gray-400">Team performance & rebuttal curation</p>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-4xl font-bold mb-2">Manager Dashboard</h1>
+              <p className="text-gray-400">Team performance & rebuttal curation</p>
+            </div>
+          </div>
+          
+          {/* Admin Navigation */}
+          <div className="flex gap-3 mt-4">
+            <button
+              onClick={() => router.push('/admin/dashboard')}
+              className="px-4 py-2 rounded-xl border-2 border-amber-400/50 bg-amber-400/10 text-amber-400 font-semibold hover:bg-amber-400/20 transition-all flex items-center gap-2"
+            >
+              <BarChart3 className="w-4 h-4" />
+              Dashboard
+            </button>
+            <button
+              onClick={() => router.push('/admin/training-monitor')}
+              className="px-4 py-2 rounded-xl border-2 border-blue-500/50 bg-blue-500/10 text-blue-400 font-semibold hover:bg-blue-500/20 transition-all flex items-center gap-2"
+            >
+              <Activity className="w-4 h-4" />
+              Training Monitor
+            </button>
+          </div>
         </div>
 
         {/* Key Metrics */}

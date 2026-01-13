@@ -31,12 +31,29 @@ import logger from '../src/lib/logger';
 // Default batch size (can be overridden via CLI arg)
 const DEFAULT_BATCH_SIZE = 5;
 
+/**
+ * Format date/time in CST (Central Standard Time)
+ */
+function formatCST(date: Date = new Date()): string {
+  return date.toLocaleString('en-US', {
+    timeZone: 'America/Chicago',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+  }) + ' CST';
+}
+
 async function runScheduledTraining() {
   const batchSize = parseInt(process.argv[2] || String(DEFAULT_BATCH_SIZE), 10);
   const startTime = Date.now();
+  const startDate = new Date();
 
   console.log(`\n${'='.repeat(60)}`);
-  console.log(`🔄 Scheduled Training Batch - ${new Date().toISOString()}`);
+  console.log(`🔄 Scheduled Training Batch - ${formatCST(startDate)}`);
   console.log(`${'='.repeat(60)}\n`);
 
   try {
@@ -98,8 +115,10 @@ async function runScheduledTraining() {
     console.log(`${'='.repeat(60)}\n`);
 
     // Log to file for monitoring
+    const endDate = new Date();
     const logEntry = {
-      timestamp: new Date().toISOString(),
+      timestamp: endDate.toISOString(), // Keep ISO for log file (standard format)
+      timestampCST: formatCST(endDate), // Add CST for reference
       batchSize,
       battlesCompleted,
       totalCost,
@@ -143,14 +162,10 @@ async function runScheduledTraining() {
   }
 }
 
-// Run if called directly
-// Check if this file is being executed directly (not imported)
-const isMainModule = process.argv[1] && process.argv[1].endsWith('scheduled-training.ts');
-if (isMainModule) {
-  runScheduledTraining().catch((error) => {
-    console.error('Fatal error in scheduled training:', error);
-    process.exit(1);
-  });
-}
+// Always run when script is executed directly
+runScheduledTraining().catch((error) => {
+  console.error('Fatal error in scheduled training:', error);
+  process.exit(1);
+});
 
 export { runScheduledTraining };

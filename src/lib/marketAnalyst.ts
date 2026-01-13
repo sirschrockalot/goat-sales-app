@@ -67,6 +67,30 @@ export interface CreativePivotAnalysis {
 }
 
 /**
+ * Profit Zone Types
+ */
+export type ProfitZone = 'green' | 'yellow' | 'red';
+
+export interface ProfitZoneAnalysis {
+  zone: ProfitZone;
+  profit: number;
+  agreedPrice: number;
+  estimatedARV: number;
+  estimatedRepairs: number;
+  closingCosts: number;
+  canAccept: boolean;
+  requiresReluctantAcceptance: boolean;
+  requiresCreativeFinance: boolean;
+  message: string;
+}
+
+export interface ReluctantAcceptanceScript {
+  acousticTexture: string; // e.g., "[sigh]", "[clears throat]"
+  script: string; // Full reluctant acceptance script
+  closingDate: string; // Suggested closing date (30 days from now)
+}
+
+/**
  * Fetch market comps from external APIs
  * Integrates with InvestorBase and Zillow APIs
  */
@@ -598,5 +622,163 @@ export async function getRentToPriceAnalysis(propertyData: PropertyData): Promis
     rentDiscount,
     isUnderRented,
     negotiationLeverage,
+  };
+}
+
+/**
+ * Calculate profit from a deal
+ * Profit = ARV - Purchase Price - Repairs - Closing Costs (3%)
+ */
+export function calculateProfit(
+  agreedPrice: number,
+  estimatedARV: number,
+  estimatedRepairs: number
+): number {
+  const closingCosts = agreedPrice * 0.03; // 3% closing costs
+  const profit = estimatedARV - agreedPrice - estimatedRepairs - closingCosts;
+  return Math.max(0, profit); // Don't return negative profits
+}
+
+/**
+ * Analyze profit zone for a deal
+ * Green Zone (Target): Profit ≥ $15,000 - AI should close aggressively
+ * Yellow Zone (Flexible): Profit $8,000 - $14,999 - AI should use "The Takeaway" or "False Surrender"
+ * Red Zone (Dead): Profit < $8,000 - AI must walk away or pivot to Creative Finance
+ */
+export function analyzeProfitZone(
+  agreedPrice: number,
+  estimatedARV: number,
+  estimatedRepairs: number
+): ProfitZoneAnalysis {
+  const profit = calculateProfit(agreedPrice, estimatedARV, estimatedRepairs);
+  const closingCosts = agreedPrice * 0.03;
+
+  let zone: ProfitZone;
+  let canAccept: boolean;
+  let requiresReluctantAcceptance: boolean;
+  let requiresCreativeFinance: boolean;
+  let message: string;
+
+  if (profit >= 15000) {
+    // Green Zone: Target profit
+    zone = 'green';
+    canAccept = true;
+    requiresReluctantAcceptance = false;
+    requiresCreativeFinance = false;
+    message = `Green Zone: Profit $${profit.toFixed(0)} meets target. Close aggressively.`;
+  } else if (profit >= 8000) {
+    // Yellow Zone: Flexible profit
+    zone = 'yellow';
+    canAccept = true;
+    requiresReluctantAcceptance = true;
+    requiresCreativeFinance = false;
+    message = `Yellow Zone: Profit $${profit.toFixed(0)} is below target but acceptable. Use "The Takeaway" or "False Surrender" before accepting.`;
+  } else {
+    // Red Zone: Below minimum
+    zone = 'red';
+    canAccept = false;
+    requiresReluctantAcceptance = false;
+    requiresCreativeFinance = true;
+    message = `Red Zone: Profit $${profit.toFixed(0)} is below minimum threshold. Must walk away or pivot to Creative Finance.`;
+  }
+
+  return {
+    zone,
+    profit,
+    agreedPrice,
+    estimatedARV,
+    estimatedRepairs,
+    closingCosts,
+    canAccept,
+    requiresReluctantAcceptance,
+    requiresCreativeFinance,
+    message,
+  };
+}
+
+/**
+ * Generate "Reluctant Acceptance" script for Yellow Zone deals
+ * Uses acoustic textures and partner language to show hesitation
+ */
+export function generateReluctantAcceptanceScript(
+  sellerName: string,
+  agreedPrice: number,
+  profitZone: ProfitZoneAnalysis
+): ReluctantAcceptanceScript {
+  // Select acoustic texture (sigh or clears throat)
+  const textures = ['[sigh]', '[clears throat]'];
+  const acousticTexture = textures[Math.floor(Math.random() * textures.length)];
+
+  // Calculate closing date (30 days from now)
+  const closingDate = new Date();
+  closingDate.setDate(closingDate.getDate() + 30);
+  const formattedDate = closingDate.toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+
+  // Generate script
+  const script = `${acousticTexture} Look, ${sellerName}, I'm really sharpening the pencil here... my partners usually look for a wider margin on a project like this, but if we can close by ${formattedDate}, I think I can get them to sign off on $${agreedPrice.toLocaleString()}.`;
+
+  return {
+    acousticTexture,
+    script,
+    closingDate: formattedDate,
+  };
+}
+
+/**
+ * Calculate Max Allowable Offer with tiered profit zones
+ * Returns the maximum price that maintains each profit zone threshold
+ */
+export function calculateMaxAllowableOffer(
+  estimatedARV: number,
+  estimatedRepairs: number,
+  targetZone: ProfitZone = 'green'
+): {
+  greenZoneMAO: number; // Price for $15k+ profit
+  yellowZoneMAO: number; // Price for $8k-$14,999 profit
+  redZoneThreshold: number; // Price below which profit < $8k
+  recommendedMAO: number; // Based on target zone
+} {
+  const closingCostsRate = 0.03; // 3%
+
+  // Green Zone: Profit ≥ $15,000
+  // Profit = ARV - Price - Repairs - (Price * 0.03)
+  // $15,000 = ARV - Price - Repairs - (Price * 0.03)
+  // $15,000 = ARV - Repairs - Price * (1 + 0.03)
+  // Price = (ARV - Repairs - $15,000) / 1.03
+  const greenZoneMAO = Math.max(0, (estimatedARV - estimatedRepairs - 15000) / 1.03);
+
+  // Yellow Zone: Profit ≥ $8,000
+  // Price = (ARV - Repairs - $8,000) / 1.03
+  const yellowZoneMAO = Math.max(0, (estimatedARV - estimatedRepairs - 8000) / 1.03);
+
+  // Red Zone threshold: Profit < $8,000
+  // Any price above yellowZoneMAO falls into red zone
+  const redZoneThreshold = yellowZoneMAO;
+
+  // Recommended MAO based on target zone
+  let recommendedMAO: number;
+  switch (targetZone) {
+    case 'green':
+      recommendedMAO = greenZoneMAO;
+      break;
+    case 'yellow':
+      recommendedMAO = yellowZoneMAO;
+      break;
+    case 'red':
+      recommendedMAO = redZoneThreshold;
+      break;
+    default:
+      recommendedMAO = greenZoneMAO;
+  }
+
+  return {
+    greenZoneMAO: Math.round(greenZoneMAO),
+    yellowZoneMAO: Math.round(yellowZoneMAO),
+    redZoneThreshold: Math.round(redZoneThreshold),
+    recommendedMAO: Math.round(recommendedMAO),
   };
 }

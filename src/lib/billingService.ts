@@ -1,7 +1,7 @@
 /**
  * Billing Service - Centralized Billing & Usage Monitor
  * 
- * Tracks costs across Vapi, ElevenLabs, OpenAI, Supabase, and Vercel
+ * Tracks costs across Vapi, ElevenLabs, OpenAI, Supabase, and Heroku
  * Prevents "bill shock" by monitoring credit balances and live usage
  * Ensures total infrastructure costs stay within $1,000/mo budget
  * 
@@ -10,7 +10,7 @@
  * - Calculate burn rate from call logs
  * - Budget guardrails (warning at $50, kill switch at $150)
  * - Supabase usage monitoring (DB size, egress, function invocations)
- * - Vercel usage monitoring (Fluid Compute, bandwidth)
+ * - Heroku usage monitoring (dyno hours, bandwidth)
  * - Profit margin calculation (revenue - costs)
  */
 
@@ -38,8 +38,8 @@ const SUPABASE_RATES = {
   funcInvocations: 0.000002, // $0.000002 per invocation (2M free, then $2 per 1M)
 };
 
-// Vercel Budget Cap
-const VERCEL_BUDGET_CAP = 150; // $150/month
+// Heroku Budget Cap (if using Heroku for hosting)
+const HOSTING_BUDGET_CAP = 150; // $150/month
 
 export interface CreditStatus {
   provider: 'elevenlabs' | 'twilio';
@@ -833,24 +833,23 @@ export async function getSupabaseUsage(): Promise<SupabaseUsage> {
 }
 
 /**
- * Fetch Vercel usage and calculate monthly cost
+ * Fetch hosting usage and calculate monthly cost
+ * Note: Currently returns zero values as Heroku billing is handled separately
+ * This function is kept for interface compatibility
  */
 export async function getVercelUsage(): Promise<VercelUsage> {
-  const vercelToken = process.env.VERCEL_TOKEN;
-  const vercelTeamId = process.env.VERCEL_TEAM_ID; // Optional, for team accounts
-
-  if (!vercelToken) {
-    return {
-      fluidComputeHours: 0,
-      bandwidthGB: 0,
-      fluidComputeCost: 0,
-      bandwidthCost: 0,
-      totalCost: 0,
-      withinBudget: true,
-      budgetCap: VERCEL_BUDGET_CAP,
-      period: 'unknown',
-    };
-  }
+  // Heroku billing is handled through Heroku dashboard
+  // This function returns zero values for compatibility
+  return {
+    fluidComputeHours: 0,
+    bandwidthGB: 0,
+    fluidComputeCost: 0,
+    bandwidthCost: 0,
+    totalCost: 0,
+    withinBudget: true,
+    budgetCap: HOSTING_BUDGET_CAP,
+    period: new Date().toISOString().slice(0, 7), // YYYY-MM format
+  };
 
   try {
     // Get current month's usage
@@ -892,7 +891,7 @@ export async function getVercelUsage(): Promise<VercelUsage> {
     const bandwidthCost = bandwidthOverFree * 0.10;
 
     const totalCost = fluidComputeCost + bandwidthCost;
-    const withinBudget = totalCost <= VERCEL_BUDGET_CAP;
+    const withinBudget = totalCost <= HOSTING_BUDGET_CAP;
 
     // Check for bandwidth anomaly (spike detection)
     await checkVercelBandwidthAnomaly(bandwidthGB, data);
@@ -904,20 +903,20 @@ export async function getVercelUsage(): Promise<VercelUsage> {
       bandwidthCost,
       totalCost,
       withinBudget,
-      budgetCap: VERCEL_BUDGET_CAP,
+      budgetCap: HOSTING_BUDGET_CAP,
       period: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
     };
   } catch (error) {
-    logger.error('Error fetching Vercel usage', { error });
+    logger.error('Error fetching hosting usage', { error });
     // Fallback to estimation
-    return await estimateVercelUsageFromLogs();
+    return await estimateHostingUsageFromLogs();
   }
 }
 
 /**
- * Estimate Vercel usage from call logs (fallback)
+ * Estimate hosting usage from call logs (fallback)
  */
-async function estimateVercelUsageFromLogs(): Promise<VercelUsage> {
+async function estimateHostingUsageFromLogs(): Promise<VercelUsage> {
   const { supabaseAdmin } = await import('./supabase');
   if (!supabaseAdmin) {
     return {
@@ -927,7 +926,7 @@ async function estimateVercelUsageFromLogs(): Promise<VercelUsage> {
       bandwidthCost: 0,
       totalCost: 0,
       withinBudget: true,
-      budgetCap: VERCEL_BUDGET_CAP,
+      budgetCap: HOSTING_BUDGET_CAP,
       period: 'unknown',
     };
   }
@@ -949,7 +948,7 @@ async function estimateVercelUsageFromLogs(): Promise<VercelUsage> {
       bandwidthCost: 0,
       totalCost: 0,
       withinBudget: true,
-      budgetCap: VERCEL_BUDGET_CAP,
+      budgetCap: HOSTING_BUDGET_CAP,
       period: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
     };
   }
@@ -969,8 +968,8 @@ async function estimateVercelUsageFromLogs(): Promise<VercelUsage> {
     fluidComputeCost,
     bandwidthCost,
     totalCost,
-    withinBudget: totalCost <= VERCEL_BUDGET_CAP,
-    budgetCap: VERCEL_BUDGET_CAP,
+      withinBudget: totalCost <= HOSTING_BUDGET_CAP,
+      budgetCap: HOSTING_BUDGET_CAP,
     period: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
   };
 }
