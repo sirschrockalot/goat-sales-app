@@ -4,6 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import path from 'path';
 import logger from '@/lib/logger';
 import { getEnvironmentConfig } from '@/lib/env-manager';
 import { getAppConfig } from '@/lib/config';
@@ -131,28 +132,21 @@ async function runTrainingBatch(batchSize: number): Promise<TrainingBatchResult>
 
     // Dynamically import runBattleLoop from root scripts (server-side only)
     // Note: Scripts directory needs to be accessible in production
-    const path = await import('path');
     const projectRoot = process.cwd();
     const autonomousBattlePath = path.join(projectRoot, 'scripts', 'autonomousBattle.js');
     
-    // Try to import the script
-    // In production, this requires the scripts directory to be present and compiled
+    // Try to import the script - use eval to prevent Next.js from analyzing at build time
     let autonomousBattleModule: any;
     try {
-      autonomousBattleModule = await import(`file://${autonomousBattlePath}`);
-    } catch (jsError: any) {
-      // Fallback: try TypeScript file (if tsx is available at runtime)
-      const tsPath = path.join(projectRoot, 'scripts', 'autonomousBattle.ts');
+      // Use Function constructor to create dynamic import that Next.js won't analyze
+      const importPath = `file://${autonomousBattlePath}`;
+      autonomousBattleModule = await (new Function('return import("' + importPath.replace(/"/g, '\\"') + '")'))();
+    } catch {
+      // Fallback: try relative path
       try {
-        autonomousBattleModule = await import(`file://${tsPath}`);
-      } catch (tsError: any) {
-        // Last resort: try relative path
-        try {
-          autonomousBattleModule = await import('../../../scripts/autonomousBattle.js');
-        } catch (relError: any) {
-          const errorMsg = jsError?.message || tsError?.message || relError?.message || 'Unknown error';
-          throw new Error(`Failed to import autonomousBattle script: ${errorMsg}. Ensure scripts directory is accessible.`);
-        }
+        autonomousBattleModule = await (new Function('return import("../../../scripts/autonomousBattle.js")'))();
+      } catch {
+        throw new Error('Failed to import autonomousBattle script. Scripts directory may not be accessible in production build.');
       }
     }
     
