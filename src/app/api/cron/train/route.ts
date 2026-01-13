@@ -13,7 +13,7 @@ import { getAppConfig } from '@/lib/config';
 // Configuration
 const DEFAULT_BATCH_SIZE = 5; // Number of battles per cron execution
 const MAX_BATCH_SIZE = 10; // Maximum allowed batch size
-const MAX_EXECUTION_TIME_MS = 50_000; // 50 seconds (Vercel free tier limit is 10s, pro is 60s)
+const MAX_EXECUTION_TIME_MS = 25_000; // 25 seconds (Heroku timeout is 30s, leave buffer)
 
 interface TrainingBatchResult {
   battlesCompleted: number;
@@ -282,12 +282,24 @@ export async function POST(request: NextRequest) {
 
     logger.info('Training batch manually triggered', { batchSize });
 
-    const batchResult = await runTrainingBatch(batchSize);
+    // Run training in background to avoid timeout
+    // Return immediately with "started" status
+    runTrainingBatch(batchSize).catch((error) => {
+      logger.error('Error in background training batch', { error, batchSize });
+    });
 
     return NextResponse.json({
       success: true,
-      batch: batchResult,
-      message: `Training batch completed: ${batchResult.battlesCompleted} battles`,
+      batch: {
+        battlesCompleted: 0,
+        totalCost: 0,
+        averageScore: 0,
+        batchId: `batch-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        completedAt: new Date().toISOString(),
+        errors: [],
+      },
+      message: `Training batch started (running in background). Check sandbox_battles table for results.`,
+      status: 'started',
     });
   } catch (error: any) {
     logger.error('Error in manual training trigger', { error });
