@@ -130,19 +130,32 @@ async function runTrainingBatch(batchSize: number): Promise<TrainingBatchResult>
     const appConfig = getAppConfig();
 
     // Dynamically import runBattleLoop from root scripts (server-side only)
-    // Use path resolution that works in both dev and production
+    // Note: Scripts directory needs to be accessible in production
     const path = await import('path');
     const projectRoot = process.cwd();
-    // Try .js first (compiled), then .ts (if tsx/ts-node available)
     const autonomousBattlePath = path.join(projectRoot, 'scripts', 'autonomousBattle.js');
+    
+    // Try to import the script
+    // In production, this requires the scripts directory to be present and compiled
     let autonomousBattleModule: any;
     try {
-      autonomousBattleModule = await import(autonomousBattlePath);
-    } catch (error) {
-      // Fallback to .ts if .js not found (development)
+      autonomousBattleModule = await import(`file://${autonomousBattlePath}`);
+    } catch (jsError: any) {
+      // Fallback: try TypeScript file (if tsx is available at runtime)
       const tsPath = path.join(projectRoot, 'scripts', 'autonomousBattle.ts');
-      autonomousBattleModule = await import(tsPath);
+      try {
+        autonomousBattleModule = await import(`file://${tsPath}`);
+      } catch (tsError: any) {
+        // Last resort: try relative path
+        try {
+          autonomousBattleModule = await import('../../../scripts/autonomousBattle.js');
+        } catch (relError: any) {
+          const errorMsg = jsError?.message || tsError?.message || relError?.message || 'Unknown error';
+          throw new Error(`Failed to import autonomousBattle script: ${errorMsg}. Ensure scripts directory is accessible.`);
+        }
+      }
     }
+    
     const { runBattleLoop } = autonomousBattleModule;
     
     // Run battle loop with batch size limit and concurrency control
