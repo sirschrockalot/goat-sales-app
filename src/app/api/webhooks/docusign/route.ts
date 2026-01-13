@@ -186,22 +186,24 @@ async function handleRecipientDelivered(data: DocuSignWebhookPayload['data']) {
             vapiCallId: callDataTyped?.metadata?.vapiCallId,
             onStatusChange: async (status) => {
               // Update database when status changes
-              await supabaseAdmin
-                .from('calls')
-                .update({
-                  last_docusign_event: status.status,
-                  updated_at: new Date().toISOString(),
-                })
-                .eq('id', data.callId);
+              if (supabaseAdmin) {
+                await (supabaseAdmin as any)
+                  .from('calls')
+                  .update({
+                    last_docusign_event: status.status,
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq('id', data.callId);
+              }
             },
           });
 
           // Initialize walkthrough with deal details
-          if (callData.property_address && callData.final_offer_price) {
+          if (callDataTyped.property_address && callDataTyped.final_offer_price) {
             monitor.initializeWalkthrough(
               'Seller', // Could be extracted from call metadata
-              callData.property_address,
-              callData.final_offer_price,
+              callDataTyped.property_address,
+              callDataTyped.final_offer_price,
               100 // Earnest money
             );
           }
