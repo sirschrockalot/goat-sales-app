@@ -214,7 +214,7 @@ async function handleRecipientDelivered(data: DocuSignWebhookPayload['data']) {
 
       // Update sandbox_battles if this is a training battle
       if (supabaseAdmin) {
-        const { error } = await supabaseAdmin
+        const { error } = await (supabaseAdmin as any)
           .from('sandbox_battles')
           .update({
             document_status: 'delivered',
@@ -245,7 +245,7 @@ async function handleRecipientViewed(data: DocuSignWebhookPayload['data']) {
   if (data.callId) {
     const { supabaseAdmin } = await import('@/lib/supabase');
     if (supabaseAdmin) {
-      const { error } = await supabaseAdmin
+      const { error } = await (supabaseAdmin as any)
         .from('sandbox_battles')
         .update({
           document_status: 'viewed',
@@ -291,7 +291,7 @@ async function handleRecipientCompleted(data: DocuSignWebhookPayload['data']) {
   // Get call data to calculate time_to_sign
   let callData: any = null;
   if (data.callId) {
-    const { data: call, error: callError } = await supabaseAdmin
+    const { data: call, error: callError } = await (supabaseAdmin as any)
       .from('calls')
       .select('created_at, property_address, final_offer_price, suggested_buy_price')
       .eq('id', data.callId)
@@ -322,7 +322,7 @@ async function handleRecipientCompleted(data: DocuSignWebhookPayload['data']) {
       updateData.time_to_sign = timeToSign; // in seconds
     }
 
-    const { error: updateError } = await supabaseAdmin
+    const { error: updateError } = await (supabaseAdmin as any)
       .from('calls')
       .update(updateData)
       .eq('id', data.callId);
@@ -343,7 +343,7 @@ async function handleRecipientCompleted(data: DocuSignWebhookPayload['data']) {
 
   // Update sandbox_battles with completed status
   if (data.callId) {
-    const { error } = await supabaseAdmin
+    const { error } = await (supabaseAdmin as any)
       .from('sandbox_battles')
       .update({
         document_status: 'completed',
