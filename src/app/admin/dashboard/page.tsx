@@ -93,14 +93,26 @@ export default function AdminDashboard() {
     // If we have a user but they're not admin, redirect
     // But give it a moment for refreshProfile to complete
     if (user && !isAdmin) {
-      console.warn('Admin dashboard: User is not admin, redirecting. User:', user);
-      // Small delay to allow profile refresh to complete
+      console.warn('Admin dashboard: User is not admin, redirecting. User:', user, 'isAdmin:', isAdmin);
+      console.warn('Profile data:', { userId: user.id, email: user.email, is_admin: user.is_admin });
+      
+      // Wait longer for profile refresh to complete (3 seconds)
       const timeoutId = setTimeout(() => {
+        // Double-check one more time before redirecting
         if (!isAdmin) {
+          console.error('Admin dashboard: Still not admin after waiting, redirecting to home');
           router.push('/');
+        } else {
+          console.log('Admin dashboard: Admin status updated, allowing access');
         }
-      }, 1000);
+      }, 3000);
       return () => clearTimeout(timeoutId);
+    }
+    
+    // If no user at all, redirect to login (but middleware should handle this)
+    if (!authLoading && !user) {
+      console.warn('Admin dashboard: No user found, redirecting to login');
+      router.push('/login');
     }
   }, [isAdmin, authLoading, router, user]);
 

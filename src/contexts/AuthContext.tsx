@@ -77,6 +77,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       });
       if (response.ok) {
         const data = await response.json();
+        console.log('AuthContext: Profile fetched successfully', { 
+          userId: data.id, 
+          email: data.email, 
+          is_admin: data.is_admin 
+        });
         setUser({
           id: data.id,
           name: data.name,
@@ -86,10 +91,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
         });
       } else if (response.status === 401) {
         // Not authenticated - this is normal if user is not logged in
+        console.warn('AuthContext: Profile fetch returned 401 (not authenticated)');
         setUser(null);
       } else {
         // Profile might not exist yet (will be created by trigger)
         // Use fallback data from auth user
+        console.warn('AuthContext: Profile fetch failed, using fallback', { 
+          status: response.status, 
+          statusText: response.statusText 
+        });
         setUser({
           id: authUser.id,
           name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User',
