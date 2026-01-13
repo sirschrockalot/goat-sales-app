@@ -118,14 +118,20 @@ async function runTrainingBatch(batchSize: number): Promise<TrainingBatchResult>
   const startTime = Date.now();
   const errors: string[] = [];
 
+  // Log immediately - even before any async operations
+  console.log(`[TRAINING] Starting training batch ${batchId} with batchSize ${batchSize}`);
   logger.info('Starting training batch', { batchId, batchSize });
 
   try {
     // Verify environment
     const config = getEnvironmentConfig();
+    console.log(`[TRAINING] Environment config: ${config.environment}, isProduction: ${config.isProduction}`);
+    
     // Ensure we're in sandbox mode
     if (config.environment !== 'sandbox') {
-      throw new Error('Training can only run in sandbox environment');
+      const errorMsg = `Training can only run in sandbox environment, got: ${config.environment}`;
+      console.error(`[TRAINING] ${errorMsg}`);
+      throw new Error(errorMsg);
     }
 
     // Get app config for concurrency settings
@@ -348,8 +354,10 @@ export async function POST(request: NextRequest) {
 
     // Run training in background to avoid timeout
     // Return immediately with "started" status
+    console.log(`[TRAINING] Triggering background batch with size ${batchSize}`);
     runTrainingBatch(batchSize)
       .then((result) => {
+        console.log(`[TRAINING] Background batch completed: ${result.battlesCompleted} battles, $${result.totalCost.toFixed(4)} cost`);
         logger.info('Background training batch completed', {
           batchId: result.batchId,
           battlesCompleted: result.battlesCompleted,
@@ -358,6 +366,7 @@ export async function POST(request: NextRequest) {
         });
       })
       .catch((error) => {
+        console.error(`[TRAINING] Background batch error:`, error);
         logger.error('Error in background training batch', {
           error: error.message || String(error),
           stack: error.stack,
