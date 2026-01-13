@@ -74,7 +74,24 @@ export default function LoginPage() {
           return;
         }
 
-        if (data.user) {
+        if (data.user && data.session) {
+          // Set cookie for middleware to read
+          // Supabase stores session in localStorage by default, but middleware needs cookies
+          const cookieName = `sb-${new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || '').hostname.split('.')[0]}-auth-token`;
+          const sessionData = JSON.stringify({
+            access_token: data.session.access_token,
+            refresh_token: data.session.refresh_token,
+            expires_at: data.session.expires_at,
+            expires_in: data.session.expires_in,
+            token_type: data.session.token_type,
+            user: data.user,
+          });
+          
+          // Set cookie with proper attributes for HTTPS
+          document.cookie = `${cookieName}=${encodeURIComponent(sessionData)}; path=/; max-age=${data.session.expires_in || 3600}; SameSite=Lax; Secure`;
+          
+          console.log('Login successful, cookie set:', cookieName);
+          
           // Redirect to home after successful login
           window.location.href = '/';
         }

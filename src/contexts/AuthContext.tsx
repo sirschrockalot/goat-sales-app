@@ -136,6 +136,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
+      // When session changes, update cookie for middleware
+      if (session && typeof window !== 'undefined') {
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        if (supabaseUrl) {
+          const projectRef = new URL(supabaseUrl).hostname.split('.')[0];
+          const cookieName = `sb-${projectRef}-auth-token`;
+          const sessionData = JSON.stringify({
+            access_token: session.access_token,
+            refresh_token: session.refresh_token,
+            expires_at: session.expires_at,
+            expires_in: session.expires_in,
+            token_type: session.token_type,
+            user: session.user,
+          });
+          
+          // Set cookie with proper attributes
+          const maxAge = session.expires_in || 3600;
+          document.cookie = `${cookieName}=${encodeURIComponent(sessionData)}; path=/; max-age=${maxAge}; SameSite=Lax; Secure`;
+          console.log('Auth state changed, cookie updated:', cookieName);
+        }
+      }
       fetchProfile(session?.user ?? null);
     });
 
