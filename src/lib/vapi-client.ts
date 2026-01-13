@@ -137,10 +137,18 @@ export class VapiClient {
 
     // Listen for messages (transcripts come via message events)
     this.vapi.on('message', (message: any) => {
-      logger.debug('Vapi message event', { messageType: message.type });
+      logger.debug('Vapi message event', { 
+        messageType: message.type,
+        hasTranscript: !!message.transcript,
+        hasContent: !!message.content,
+        hasText: !!message.text,
+        role: message.role,
+        fullMessage: message
+      });
       
       // Check if this is a transcript message
-      if (message.type === 'transcript' || message.transcript || message.content) {
+      // Vapi sends transcripts via message events with type='transcript' or with transcript/content fields
+      if (message.type === 'transcript' || message.transcript || message.content || message.text) {
         // Determine role: user messages typically have role='user' or type='user-message'
         // Assistant messages have role='assistant' or type='assistant-message'
         let role: 'user' | 'assistant' = 'assistant';
@@ -158,9 +166,10 @@ export class VapiClient {
           timestamp: Date.now(),
         };
 
-        logger.debug('Transcription event created', { 
+        logger.info('📝 Transcription received', { 
           role, 
-          transcriptPreview: event.transcript.substring(0, 50) + '...' 
+          transcriptLength: event.transcript.length,
+          transcriptPreview: event.transcript.substring(0, 100) + (event.transcript.length > 100 ? '...' : '')
         });
         this.transcriptionCallbacks.forEach((callback) => callback(event));
       }
@@ -168,7 +177,13 @@ export class VapiClient {
 
     // Listen for transcript events specifically (Vapi SDK may emit these separately)
     this.vapi.on('transcript' as any, (transcript: any) => {
-      logger.debug('Vapi transcript event', { transcript });
+      logger.info('📝 Vapi transcript event received', { 
+        transcript,
+        hasTranscript: !!transcript?.transcript,
+        hasText: !!transcript?.text,
+        hasContent: !!transcript?.content,
+        role: transcript?.role
+      });
       
       if (transcript) {
         const event: TranscriptionEvent = {
@@ -178,9 +193,50 @@ export class VapiClient {
           timestamp: Date.now(),
         };
 
-        logger.debug('Transcription event from transcript event', { 
-          role: event.role, 
-          transcriptPreview: event.transcript.substring(0, 50) + '...' 
+        if (event.transcript) {
+          logger.info('📝 Transcription processed from transcript event', { 
+            role: event.role, 
+            transcriptLength: event.transcript.length,
+            transcriptPreview: event.transcript.substring(0, 100) + (event.transcript.length > 100 ? '...' : '')
+          });
+          this.transcriptionCallbacks.forEach((callback) => callback(event));
+        } else {
+          logger.warn('⚠️ Transcript event received but no transcript text found', { transcript });
+        }
+      }
+    });
+
+    // Listen for user transcript events (Vapi may send these separately)
+    this.vapi.on('user-transcript' as any, (data: any) => {
+      logger.info('👤 User transcript event received', { data });
+      if (data?.transcript || data?.text || data?.content) {
+        const event: TranscriptionEvent = {
+          type: 'transcript',
+          transcript: data.transcript || data.text || data.content || '',
+          role: 'user',
+          timestamp: Date.now(),
+        };
+        logger.info('📝 User transcription processed', { 
+          transcriptLength: event.transcript.length,
+          preview: event.transcript.substring(0, 100) + (event.transcript.length > 100 ? '...' : '')
+        });
+        this.transcriptionCallbacks.forEach((callback) => callback(event));
+      }
+    });
+
+    // Listen for assistant transcript events (Vapi may send these separately)
+    this.vapi.on('assistant-transcript' as any, (data: any) => {
+      logger.info('🤖 Assistant transcript event received', { data });
+      if (data?.transcript || data?.text || data?.content) {
+        const event: TranscriptionEvent = {
+          type: 'transcript',
+          transcript: data.transcript || data.text || data.content || '',
+          role: 'assistant',
+          timestamp: Date.now(),
+        };
+        logger.info('📝 Assistant transcription processed', { 
+          transcriptLength: event.transcript.length,
+          preview: event.transcript.substring(0, 100) + (event.transcript.length > 100 ? '...' : '')
         });
         this.transcriptionCallbacks.forEach((callback) => callback(event));
       }
@@ -188,11 +244,11 @@ export class VapiClient {
 
     // Listen for user speech events (if available)
     this.vapi.on('user-speech-start' as any, (data: any) => {
-      logger.debug('User speech started', { data });
+      logger.info('🎤 User speech started - microphone is detecting audio', { data });
     });
 
     this.vapi.on('user-speech-end' as any, (data: any) => {
-      logger.debug('User speech ended', { data });
+      logger.info('🎤 User speech ended', { data });
     });
 
     // Listen for assistant speech events
@@ -390,18 +446,33 @@ export class VapiClient {
           );
         }
 
-        // Check if microphone is muted (this could prevent transcription)
-        if (this.vapi && typeof (this.vapi as any).isMuted === 'function') {
-          const isMuted = (this.vapi as any).isMuted();
-          if (isMuted) {
-            logger.warn('Microphone appears to be muted - user speech may not be transcribed');
-            // Try to unmute
-            if (typeof (this.vapi as any).setMuted === 'function') {
-              (this.vapi as any).setMuted(false);
-              logger.debug('Attempted to unmute microphone');
+        // CRITICAL: Ensure microphone is unmuted to receive audio for transcription
+        // This must be done after the call starts to ensure Daily.co has initialized
+        setTimeout(() => {
+          if (this.vapi) {
+            try {
+              // Explicitly unmute microphone to ensure audio is being captured
+              if (typeof (this.vapi as any).setMuted === 'function') {
+                (this.vapi as any).setMuted(false);
+                logger.info('Microphone explicitly unmuted for transcription');
+              }
+              
+              // Check mute status and log for debugging
+              if (typeof (this.vapi as any).isMuted === 'function') {
+                const isMuted = (this.vapi as any).isMuted();
+                if (isMuted) {
+                  logger.warn('⚠️ Microphone is muted - user speech will NOT be transcribed!');
+                  // Try again to unmute
+                  (this.vapi as any).setMuted(false);
+                } else {
+                  logger.info('✅ Microphone is unmuted - ready to receive audio');
+                }
+              }
+            } catch (error) {
+              logger.error('Error checking/unmuting microphone', { error });
             }
           }
-        }
+        }, 1000); // Wait 1 second for Daily.co to fully initialize
       }
     } catch (error) {
       logger.error('Error starting call', { error });

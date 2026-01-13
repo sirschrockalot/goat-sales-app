@@ -379,6 +379,22 @@ export async function POST(request: NextRequest) {
           ? centralizedConfig.firstMessage // Dynamic firstMessage with seller name and property address
           : persona.firstMessage || 'Hello, how can I help you today?',
         maxDurationSeconds: persona.maxDuration || 600,
+        // CRITICAL: Enable clientMessages to receive transcriptions on the client side
+        // Without this, the app won't receive transcription events even if the microphone is working
+        clientMessages: [
+          'conversation-update',
+          'function-call',
+          'hang',
+          'model-output',
+          'speech-update',
+          'status-update',
+          'transfer-update',
+          'transcript', // REQUIRED: Enables client to receive transcription events
+          'tool-calls',
+          'user-interrupted',
+          'voice-input',
+          'workflow.node.started',
+        ],
         // Enable fillers and backchanneling for more human-like conversation
         // Note: These properties are configured via the Vapi SDK on the client-side, not in the assistant creation API
         fillersEnabled: true,
