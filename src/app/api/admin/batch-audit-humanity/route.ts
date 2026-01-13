@@ -123,9 +123,9 @@ async function auditVocalSoul(transcript: string, battleId: string) {
       .update({
         humanity_grade: gapReport.humanityGrade,
         closeness_to_cline: gapReport.closenessToCline,
-        prosody_features: prosodyFeatures,
-        robotic_gap_report: gapReport,
-      })
+        prosody_features: prosodyFeatures as any,
+        robotic_gap_report: gapReport as any,
+      } as any)
       .eq('id', battleId);
   }
 
