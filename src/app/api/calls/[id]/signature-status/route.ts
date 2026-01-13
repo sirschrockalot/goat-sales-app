@@ -33,7 +33,7 @@ export async function GET(
       .eq('id', callId)
       .single();
 
-    if (callError) {
+    if (callError || !call) {
       logger.error('Error fetching call signature status', {
         error: callError,
         callId,
@@ -43,9 +43,10 @@ export async function GET(
 
     // Map last_docusign_event to document_status
     let status: 'sent' | 'delivered' | 'viewed' | 'completed' = 'sent';
+    const callData = call as any;
     
-    if (call.last_docusign_event) {
-      switch (call.last_docusign_event) {
+    if (callData.last_docusign_event) {
+      switch (callData.last_docusign_event) {
         case 'envelope-sent':
           status = 'sent';
           break;
@@ -64,15 +65,15 @@ export async function GET(
     }
 
     // Calculate deal profit if available
-    const dealProfit = call.final_offer_price && call.suggested_buy_price
-      ? call.final_offer_price - call.suggested_buy_price
+    const dealProfit = callData.final_offer_price && callData.suggested_buy_price
+      ? callData.final_offer_price - callData.suggested_buy_price
       : null;
 
     return NextResponse.json({
       status,
-      signedPdfUrl: call.signed_pdf_url,
-      timeToSign: call.time_to_sign,
-      propertyAddress: call.property_address,
+      signedPdfUrl: callData.signed_pdf_url,
+      timeToSign: callData.time_to_sign,
+      propertyAddress: callData.property_address,
       dealProfit,
       callStartTime: call.created_at,
     });
