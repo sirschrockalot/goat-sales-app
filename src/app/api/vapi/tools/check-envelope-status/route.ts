@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
       .eq('id', callId)
       .single();
 
-    if (callError) {
+    if (callError || !call) {
       logger.error('Error fetching call status', { error: callError, callId });
       return NextResponse.json(
         { error: 'Call not found' },
@@ -56,9 +56,10 @@ export async function POST(request: NextRequest) {
 
     // Map last_docusign_event to status
     let status: 'sent' | 'delivered' | 'viewed' | 'completed' = 'sent';
+    const callData = call as any;
     
-    if (call.last_docusign_event) {
-      switch (call.last_docusign_event) {
+    if (callData.last_docusign_event) {
+      switch (callData.last_docusign_event) {
         case 'envelope-sent':
           status = 'sent';
           break;
