@@ -10,7 +10,7 @@ import { auditPillars, getPillarAuditor } from '@/lib/pillarAudit';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Check authentication
@@ -19,7 +19,7 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const callId = params.id;
+    const { id: callId } = await params;
 
     // Get Supabase client
     const { supabaseAdmin } = await import('@/lib/supabase');
