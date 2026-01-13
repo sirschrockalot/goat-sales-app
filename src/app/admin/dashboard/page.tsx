@@ -252,8 +252,19 @@ export default function AdminDashboard() {
   // Check admin status - use user.is_admin directly to avoid stale state
   const userIsAdmin = user?.is_admin || isAdmin;
   
+  console.log('AdminDashboard render:', { 
+    authLoading, 
+    loading, 
+    isAdmin, 
+    userIsAdmin, 
+    userIsAdminDirect: user?.is_admin,
+    hasUser: !!user,
+    userEmail: user?.email 
+  });
+  
   // If we have a user but isAdmin is false, wait a bit for profile refresh
   // Don't redirect immediately - give time for refreshProfile to complete
+  // BUT: If user.is_admin is true, trust it even if isAdmin hook is false
   if (user && !userIsAdmin && !authLoading) {
     // This will be handled by the useEffect redirect, but show a message first
     return (
@@ -272,7 +283,8 @@ export default function AdminDashboard() {
   }
 
   // If not admin after waiting, show access denied (will redirect via useEffect)
-  if (!userIsAdmin && user && !authLoading) {
+  // BUT: Only redirect if BOTH isAdmin and user.is_admin are false
+  if (!userIsAdmin && user && !authLoading && !user.is_admin && !isAdmin) {
     return (
       <div className="min-h-screen bg-[#0B0E14] text-white flex items-center justify-center">
         <div className="text-center">

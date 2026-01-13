@@ -99,11 +99,28 @@ export default function HomeScreen({
         {isAdmin && (
           <a
             href="/admin/dashboard"
-            onClick={(e) => {
-              console.log('Manager Dashboard clicked, isAdmin:', isAdmin, 'user:', user);
-              // Try router.push first for client-side navigation
+            onClick={async (e) => {
               e.preventDefault();
-              router.push('/admin/dashboard');
+              console.log('Manager Dashboard clicked, isAdmin:', isAdmin, 'user:', user);
+              console.log('Navigating to /admin/dashboard...');
+              
+              try {
+                // Try client-side navigation first
+                await router.push('/admin/dashboard');
+                console.log('router.push completed');
+                
+                // Fallback: if navigation doesn't happen after a short delay, use window.location
+                setTimeout(() => {
+                  if (window.location.pathname !== '/admin/dashboard') {
+                    console.warn('router.push may have failed, using window.location as fallback');
+                    window.location.href = '/admin/dashboard';
+                  }
+                }, 500);
+              } catch (error) {
+                console.error('Navigation error:', error);
+                // Fallback to window.location if router.push fails
+                window.location.href = '/admin/dashboard';
+              }
             }}
             className="w-full rounded-2xl p-6 border-2 border-amber-400/50 flex items-center gap-4 active:scale-[0.98] transition-all duration-200 cursor-pointer"
             style={{ 
