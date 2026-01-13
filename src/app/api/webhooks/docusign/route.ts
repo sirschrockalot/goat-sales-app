@@ -170,19 +170,20 @@ async function handleRecipientDelivered(data: DocuSignWebhookPayload['data']) {
     try {
       // Get call data for walkthrough initialization
       if (supabaseAdmin) {
-        const { data: callData } = await supabaseAdmin
+        const { data: callData } = await (supabaseAdmin as any)
           .from('calls')
           .select('property_address, final_offer_price, metadata')
           .eq('id', data.callId)
           .single();
 
         if (callData) {
+          const callDataTyped = callData as any;
           // Start signature monitor with walkthrough
           const monitor = await startSignatureMonitoring({
             callId: data.callId,
             envelopeId: data.envelopeId,
             recipientEmail: data.recipients?.[0]?.email || '',
-            vapiCallId: (callData.metadata as any)?.vapiCallId,
+            vapiCallId: callDataTyped?.metadata?.vapiCallId,
             onStatusChange: async (status) => {
               // Update database when status changes
               await supabaseAdmin
