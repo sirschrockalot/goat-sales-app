@@ -136,6 +136,16 @@ export default function TrainingMonitor() {
   const [showBreakthroughModal, setShowBreakthroughModal] = useState(false);
   const [selectedBreakthrough, setSelectedBreakthrough] = useState<any | null>(null);
 
+  // Budget status
+  const [budgetStatus, setBudgetStatus] = useState<{
+    todaySpend: number;
+    dailyCap: number;
+    remaining: number;
+    percentageUsed: number;
+    isThrottled: boolean;
+    isExceeded: boolean;
+  } | null>(null);
+
   // Fetch battles
   const fetchBattles = async () => {
     try {
@@ -204,6 +214,19 @@ export default function TrainingMonitor() {
       }
     } catch (error) {
       console.error('Error fetching breakthroughs:', error);
+    }
+  };
+
+  // Fetch budget status
+  const fetchBudgetStatus = async () => {
+    try {
+      const response = await fetch('/api/sandbox/budget-status');
+      if (response.ok) {
+        const data = await response.json();
+        setBudgetStatus(data);
+      }
+    } catch (error) {
+      console.error('Error fetching budget status:', error);
     }
   };
 
@@ -352,15 +375,17 @@ export default function TrainingMonitor() {
     fetchKillSwitchStatus();
     fetchHumanityGrades();
     fetchBreakthroughs();
+    fetchBudgetStatus();
 
-    // Refresh every 30 seconds
+    // Refresh every 10 seconds for real-time updates (reduced from 30s)
     const interval = setInterval(() => {
       fetchBattles();
       fetchAnalytics();
       fetchKillSwitchStatus();
       fetchHumanityGrades();
       fetchBreakthroughs();
-    }, 30000);
+      fetchBudgetStatus();
+    }, 10000);
 
     return () => clearInterval(interval);
   }, []);
@@ -641,6 +666,55 @@ export default function TrainingMonitor() {
               ${battles.reduce((sum, b) => sum + b.costUsd, 0).toFixed(2)}
             </div>
           </div>
+
+          {/* Training Budget Status */}
+          {budgetStatus && (
+            <div className={`glass-card rounded-2xl p-6 border-2 ${
+              budgetStatus.isExceeded 
+                ? 'border-red-500/50 bg-red-500/10' 
+                : budgetStatus.isThrottled 
+                ? 'border-yellow-500/50 bg-yellow-500/10'
+                : 'border-green-500/30'
+            }`}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-gray-400 text-sm">Training Budget (Today)</div>
+                {budgetStatus.isExceeded ? (
+                  <AlertTriangle className="w-5 h-5 text-red-400" />
+                ) : budgetStatus.isThrottled ? (
+                  <Zap className="w-5 h-5 text-yellow-400" />
+                ) : (
+                  <DollarSign className="w-5 h-5 text-green-400" />
+                )}
+              </div>
+              <div className="text-2xl font-bold text-white mb-1">
+                ${budgetStatus.todaySpend.toFixed(2)} / ${budgetStatus.dailyCap.toFixed(2)}
+              </div>
+              <div className="text-sm text-gray-400 mb-2">
+                {budgetStatus.percentageUsed.toFixed(1)}% used • ${budgetStatus.remaining.toFixed(2)} remaining
+              </div>
+              <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${Math.min(budgetStatus.percentageUsed, 100)}%` }}
+                  transition={{ duration: 0.5 }}
+                  className={`h-full ${
+                    budgetStatus.isExceeded 
+                      ? 'bg-red-500' 
+                      : budgetStatus.isThrottled 
+                      ? 'bg-yellow-500'
+                      : 'bg-green-500'
+                  }`}
+                />
+              </div>
+              <div className="text-xs text-gray-400 mt-2">
+                {budgetStatus.isExceeded 
+                  ? '🚨 Budget exceeded - Training blocked'
+                  : budgetStatus.isThrottled 
+                  ? '⚡ Throttled - Using GPT-4o-Mini'
+                  : '✅ Full quality training'}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Vocal Soul Analysis Section */}

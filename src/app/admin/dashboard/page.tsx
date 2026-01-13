@@ -169,7 +169,13 @@ export default function AdminDashboard() {
       }
     };
 
+    // Fetch immediately
     fetchData();
+
+    // Auto-refresh every 10 seconds for real-time updates
+    const interval = setInterval(fetchData, 10000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const handleVerifyRebuttal = async (rebuttalId: string) => {

@@ -148,10 +148,10 @@ export default function BillingDashboard() {
   useEffect(() => {
     fetchBillingData();
     
-    // Auto-refresh every 30 seconds if enabled
+    // Auto-refresh every 10 seconds for real-time updates (reduced from 30s)
     let interval: NodeJS.Timeout | null = null;
     if (autoRefresh) {
-      interval = setInterval(fetchBillingData, 30000);
+      interval = setInterval(fetchBillingData, 10000);
     }
 
     return () => {
