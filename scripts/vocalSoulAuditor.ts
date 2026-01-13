@@ -442,4 +442,5 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     });
 }
 
-export { auditVocalSoul, checkAndInjectFeedback, compareToGoldStandard, ERIC_CLINE_GOLD_STANDARD };
+// Functions are already exported above, but export these for convenience
+export { compareToGoldStandard, ERIC_CLINE_GOLD_STANDARD };

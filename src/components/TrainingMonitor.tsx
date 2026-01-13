@@ -28,6 +28,7 @@ import {
   Rocket,
   Target,
   Sparkles,
+  ArrowLeft,
 } from 'lucide-react';
 import RadialGauge from './RadialGauge';
 
@@ -129,6 +130,8 @@ export default function TrainingMonitor() {
   const [humanityGrades, setHumanityGrades] = useState<HumanityGrade[]>([]);
   const [selectedHumanityBattle, setSelectedHumanityBattle] = useState<HumanityGrade | null>(null);
   const [loadingHumanity, setLoadingHumanity] = useState(false);
+  const [auditing, setAuditing] = useState(false);
+  const [auditResult, setAuditResult] = useState<{ total: number; audited: number; errors: number } | null>(null);
 
   // Breakthrough notifications
   const [breakthroughs, setBreakthroughs] = useState<any[]>([]);
@@ -200,6 +203,44 @@ export default function TrainingMonitor() {
       console.error('Error fetching humanity grades:', error);
     } finally {
       setLoadingHumanity(false);
+    }
+  };
+
+  // Trigger batch audit
+  const triggerBatchAudit = async (limit: number = 50) => {
+    setAuditing(true);
+    setAuditResult(null);
+    try {
+      const response = await fetch('/api/admin/batch-audit-humanity', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          limit,
+          minScore: 0,
+          dryRun: false,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Audit failed: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      setAuditResult({
+        total: data.total || 0,
+        audited: data.audited || 0,
+        errors: data.errors || 0,
+      });
+
+      // Refresh humanity grades after audit
+      await fetchHumanityGrades();
+    } catch (error) {
+      console.error('Error triggering batch audit:', error);
+      alert(`Failed to run batch audit: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setAuditing(false);
     }
   };
 
@@ -396,6 +437,15 @@ export default function TrainingMonitor() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
+            <div className="flex items-center gap-4 mb-2">
+              <button
+                onClick={() => window.location.href = '/admin/dashboard'}
+                className="text-gray-400 hover:text-white transition-colors flex items-center gap-2"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Back to Dashboard
+              </button>
+            </div>
             <h1 className="text-3xl font-bold text-white mb-2">Training Monitor</h1>
             <p className="text-gray-400">Autonomous Self-Play Session Dashboard</p>
           </div>
@@ -741,7 +791,32 @@ export default function TrainingMonitor() {
             <div className="text-center py-8 text-gray-400">
               <Sparkles className="w-12 h-12 mx-auto mb-4 opacity-50" />
               <p>No humanity grades available yet</p>
-              <p className="text-sm mt-2">Run vocal soul audits on battle audio files</p>
+              <p className="text-sm mt-2 mb-4">Run vocal soul audits on battle audio files</p>
+              <button
+                onClick={() => triggerBatchAudit(50)}
+                disabled={auditing}
+                className="px-4 py-2 bg-acquisition hover:bg-acquisition/80 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 mx-auto"
+              >
+                {auditing ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Auditing...
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-4 h-4" />
+                    Run Batch Audit (50 battles)
+                  </>
+                )}
+              </button>
+              {auditResult && (
+                <div className="mt-4 text-sm">
+                  <p className="text-green-400">✓ Audited {auditResult.audited} of {auditResult.total} battles</p>
+                  {auditResult.errors > 0 && (
+                    <p className="text-yellow-400">⚠ {auditResult.errors} errors</p>
+                  )}
+                </div>
+              )}
             </div>
           ) : (
             <div className="space-y-4">

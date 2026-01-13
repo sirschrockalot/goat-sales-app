@@ -52,6 +52,7 @@
     "sandbox:adversarial": "tsx scripts/adversarialTrainer.ts",
     "sandbox:golden-samples": "tsx scripts/goldenSamples.ts",
     "sandbox:audit-vocal-soul": "tsx scripts/vocalSoulAuditor.ts",
+    "sandbox:batch-audit-humanity": "tsx scripts/batch-audit-humanity-grades.ts",
     "scout:start": "tsx scripts/startTacticalScout.ts",
     "scout:scan": "tsx scripts/scanBreakthroughs.ts",
     "audit:daily": "tsx scripts/dailyAuditor.ts",
@@ -71,7 +72,9 @@
     "train:test:vercel": "tsx scripts/test-training-vercel.ts",
     "seed:verify": "EXPLICIT_ENV=sandbox tsx scripts/verify-seed.ts",
     "seed:sandbox": "EXPLICIT_ENV=sandbox tsx scripts/seed-sandbox.ts",
-    "seed:instructions": "tsx scripts/execute-seed-via-dashboard.ts"
+    "seed:instructions": "tsx scripts/execute-seed-via-dashboard.ts",
+    "migration:sandbox": "EXPLICIT_ENV=sandbox tsx scripts/execute-sandbox-migration.ts",
+    "migration:verify": "EXPLICIT_ENV=sandbox tsx scripts/verify-migration.ts"
   },
   "dependencies": {
     "@react-email/components": "^0.0.25",
