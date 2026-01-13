@@ -859,15 +859,13 @@ export async function getVercelUsage(): Promise<VercelUsage> {
 
     // Heroku billing API endpoint (placeholder - implement Heroku billing API if needed)
     // For now, return empty usage data
-    const url = ''; // Heroku billing API endpoint would go here
-
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${vercelToken}`,
-        'Content-Type': 'application/json',
-      },
-    });
+    // TODO: Implement Heroku billing API integration
+    return {
+      ...budgetInfo,
+      currentUsage: 0,
+      remainingBudget: HOSTING_BUDGET_CAP,
+      percentageUsed: 0,
+    };
 
     if (!response.ok) {
       // If API fails, estimate from webhook traffic
