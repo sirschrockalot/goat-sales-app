@@ -857,10 +857,9 @@ export async function getVercelUsage(): Promise<VercelUsage> {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
-    // Vercel billing API endpoint
-    const url = vercelTeamId
-      ? `https://api.vercel.com/v1/billing/usage?teamId=${vercelTeamId}&start=${startOfMonth.getTime()}&end=${endOfMonth.getTime()}`
-      : `https://api.vercel.com/v1/billing/usage?start=${startOfMonth.getTime()}&end=${endOfMonth.getTime()}`;
+    // Heroku billing API endpoint (placeholder - implement Heroku billing API if needed)
+    // For now, return empty usage data
+    const url = ''; // Heroku billing API endpoint would go here
 
     const response = await fetch(url, {
       method: 'GET',
