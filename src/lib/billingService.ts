@@ -850,46 +850,6 @@ export async function getVercelUsage(): Promise<VercelUsage> {
     budgetCap: HOSTING_BUDGET_CAP,
     period: new Date().toISOString().slice(0, 7), // YYYY-MM format
   };
-      // If API fails, estimate from webhook traffic
-      logger.warn('Vercel API not available, estimating from call logs');
-      return await estimateVercelUsageFromLogs();
-    }
-
-    const data = await response.json();
-    
-    // Extract usage metrics
-    // Vercel API returns usage in different formats, adjust based on actual response
-    const fluidComputeHours = data.fluidCompute?.hours || data.compute?.hours || data.usage?.compute || 0;
-    const bandwidthGB = (data.bandwidth?.bytes || data.egress?.bytes || data.usage?.bandwidth || 0) / (1024 * 1024 * 1024);
-
-    // Vercel pricing (approximate - adjust based on your plan)
-    // Fluid Compute: ~$0.18 per GB-hour
-    // Bandwidth: ~$0.10 per GB (first 100GB free on Pro)
-    const fluidComputeCost = fluidComputeHours * 0.18;
-    const bandwidthOverFree = Math.max(0, bandwidthGB - 100); // First 100GB free
-    const bandwidthCost = bandwidthOverFree * 0.10;
-
-    const totalCost = fluidComputeCost + bandwidthCost;
-    const withinBudget = totalCost <= HOSTING_BUDGET_CAP;
-
-    // Check for bandwidth anomaly (spike detection)
-    await checkVercelBandwidthAnomaly(bandwidthGB, data);
-
-    return {
-      fluidComputeHours,
-      bandwidthGB,
-      fluidComputeCost,
-      bandwidthCost,
-      totalCost,
-      withinBudget,
-      budgetCap: HOSTING_BUDGET_CAP,
-      period: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
-    };
-  } catch (error) {
-    logger.error('Error fetching hosting usage', { error });
-    // Fallback to estimation
-    return await estimateHostingUsageFromLogs();
-  }
 }
 
 /**
