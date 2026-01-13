@@ -259,8 +259,12 @@ export function validateEnvironmentConfig(config: EnvironmentConfig): void {
   if (!config.openai.apiKey) {
     errors.push(`Missing OpenAI API Key for ${config.environment}`);
   }
-  if (config.environment !== 'local' && !config.vapi.secretKey) {
-    errors.push(`Missing Vapi Secret Key for ${config.environment}`);
+  // Vapi is only required for voice calls, not for training battles
+  // Skip Vapi validation for training scripts (they can run without it)
+  // Note: This allows training to run without Vapi credentials
+  if (config.environment !== 'local' && !config.vapi.secretKey && process.env.REQUIRE_VAPI !== 'true') {
+    // Only warn, don't error - training doesn't need Vapi
+    logger.warn(`Vapi Secret Key not set for ${config.environment} - this is OK for training, but voice features won't work`);
   }
 
   if (errors.length > 0) {
