@@ -4,6 +4,11 @@
  * No timeout issues - runs locally until completion
  */
 
+// Load environment variables from .env.local
+import * as dotenv from 'dotenv';
+import * as path from 'path';
+dotenv.config({ path: path.join(process.cwd(), '.env.local') });
+
 import { runBattleLoop } from '../src/lib/training';
 import { getBudgetStatus } from '../src/lib/budgetMonitor';
 import { getSupabaseClientForEnv } from '../src/lib/env-manager';
@@ -64,12 +69,16 @@ async function runTrainingDirect() {
   const startTime = Date.now();
 
   try {
+    console.log('   ⏳ Starting runBattleLoop...\n');
+    
     // Run training directly - no API, no timeout
     const results = await runBattleLoop(undefined, batchSize, {
       batchSize,
       maxConcurrent: 3,
       delayBetweenBattles: 1000,
     });
+
+    console.log(`   ✅ runBattleLoop completed, returned ${results.length} result(s)\n`);
 
     const elapsed = Date.now() - startTime;
     const elapsedSeconds = Math.floor(elapsed / 1000);

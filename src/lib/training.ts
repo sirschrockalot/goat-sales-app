@@ -608,6 +608,7 @@ export async function runBattleLoop(
     throw new Error('No active personas found');
   }
 
+  console.log(`[TRAINING] Found ${personas.length} persona(s) to battle against`);
   logger.info('Starting battle loop', {
     personaCount: personas.length,
     batchSize,
@@ -620,15 +621,21 @@ export async function runBattleLoop(
   let killSwitchTriggered = false;
 
   // Process personas sequentially
+  console.log(`[TRAINING] Starting to process ${personas.length} persona(s)`);
   for (const persona of personas) {
+    console.log(`[TRAINING] Processing persona: ${(persona as any).name} (${(persona as any).id.substring(0, 8)}...)`);
+    
     try {
       await checkBudget();
+      console.log(`[TRAINING] Budget check passed for ${(persona as any).name}`);
     } catch (error: any) {
       if (error?.message?.includes('Budget Limit Reached')) {
+        console.log(`[TRAINING] Budget limit reached, stopping`);
         logger.error('Budget limit reached, stopping battle loop', { error: error.message });
         killSwitchTriggered = true;
         break;
       }
+      console.error(`[TRAINING] Budget check error:`, error);
       throw error;
     }
 
@@ -646,7 +653,9 @@ export async function runBattleLoop(
     }
 
     try {
+      console.log(`[TRAINING] Starting battle for ${(persona as any).name}...`);
       const result = await runBattle((persona as any).id);
+      console.log(`[TRAINING] Battle completed for ${(persona as any).name}: Score ${result.score.totalScore}, Cost $${result.cost.toFixed(4)}`);
       results.push(result);
       totalCost += result.cost;
 
