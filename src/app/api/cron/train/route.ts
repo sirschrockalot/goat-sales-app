@@ -130,10 +130,19 @@ async function runTrainingBatch(batchSize: number): Promise<TrainingBatchResult>
     const appConfig = getAppConfig();
 
     // Dynamically import runBattleLoop from root scripts (server-side only)
-    // Use absolute path from project root (works in both dev and production)
+    // Use path resolution that works in both dev and production
+    const path = await import('path');
     const projectRoot = process.cwd();
-    const autonomousBattlePath = `${projectRoot}/scripts/autonomousBattle.js`;
-    const autonomousBattleModule = await import(autonomousBattlePath) as any;
+    // Try .js first (compiled), then .ts (if tsx/ts-node available)
+    const autonomousBattlePath = path.join(projectRoot, 'scripts', 'autonomousBattle.js');
+    let autonomousBattleModule: any;
+    try {
+      autonomousBattleModule = await import(autonomousBattlePath);
+    } catch (error) {
+      // Fallback to .ts if .js not found (development)
+      const tsPath = path.join(projectRoot, 'scripts', 'autonomousBattle.ts');
+      autonomousBattleModule = await import(tsPath);
+    }
     const { runBattleLoop } = autonomousBattleModule;
     
     // Run battle loop with batch size limit and concurrency control
