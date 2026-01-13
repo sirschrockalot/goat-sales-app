@@ -14,6 +14,13 @@ const getLogger = () => {
     info: (msg: string, meta?: any) => console.log(`[INFO] ${msg}`, meta),
     warn: (msg: string, meta?: any) => console.warn(`[WARN] ${msg}`, meta),
     debug: (msg: string, meta?: any) => console.log(`[DEBUG] ${msg}`, meta),
+    setContext: (_context: { callId?: string | null; assistantId?: string | null; userId?: string | null }) => {
+      // No-op for client-side logger (context is mainly for server-side logging)
+    },
+    clearContext: () => {
+      // No-op for client-side logger
+    },
+    getContext: () => ({} as { callId?: string; assistantId?: string; userId?: string }),
   };
 
   if (typeof window === 'undefined') {
@@ -26,6 +33,9 @@ const getLogger = () => {
         info: winstonLogger.info || baseLogger.info,
         warn: winstonLogger.warn || baseLogger.warn,
         debug: winstonLogger.debug || baseLogger.debug,
+        setContext: winstonLogger.setContext || baseLogger.setContext,
+        clearContext: winstonLogger.clearContext || baseLogger.clearContext,
+        getContext: winstonLogger.getContext || baseLogger.getContext,
       };
     } catch {
       // Fallback to console if logger fails to load
