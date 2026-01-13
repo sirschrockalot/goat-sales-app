@@ -118,14 +118,15 @@ async function auditVocalSoul(transcript: string, battleId: string) {
   const gapReport = compareToGoldStandard(enhancedProsody);
 
   if (battleId && supabaseAdmin) {
+    const updateData: any = {
+      humanity_grade: gapReport.humanityGrade,
+      closeness_to_cline: gapReport.closenessToCline,
+      prosody_features: prosodyFeatures,
+      robotic_gap_report: gapReport,
+    };
     await supabaseAdmin
       .from('sandbox_battles')
-      .update({
-        humanity_grade: gapReport.humanityGrade,
-        closeness_to_cline: gapReport.closenessToCline,
-        prosody_features: prosodyFeatures as any,
-        robotic_gap_report: gapReport as any,
-      } as any)
+      .update(updateData)
       .eq('id', battleId);
   }
 
