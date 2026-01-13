@@ -198,7 +198,7 @@ export async function POST(request: NextRequest) {
     logger.info('Starting batch humanity grade audit via API', { limit, minScore, dryRun, userId: user.id });
 
     // Fetch battles without humanity grades
-    const { data: battles, error } = await supabaseAdmin
+    const { data: battles, error } = await (supabaseAdmin as any)
       .from('sandbox_battles')
       .select('id, transcript, referee_score, humanity_grade')
       .is('humanity_grade', null)
