@@ -63,11 +63,29 @@ export async function middleware(request: NextRequest) {
       const cookieNameAlt = `sb-127.0.0.1-auth-token`;
       
       // Get auth token from cookies (Supabase uses sb-<project-ref>-auth-token pattern)
+      // Also check for session cookies which may contain the token
       let accessToken: string | undefined;
-      const cookieValue = request.cookies.get(cookieName)?.value || 
-                         request.cookies.get(cookieNameAlt)?.value ||
-                         request.cookies.get('sb-access-token')?.value ||
-                         request.cookies.get('supabase-auth-token')?.value;
+      
+      // Try primary cookie name
+      let cookieValue = request.cookies.get(cookieName)?.value;
+      
+      // Try alternative cookie names
+      if (!cookieValue) {
+        cookieValue = request.cookies.get(cookieNameAlt)?.value ||
+                      request.cookies.get('sb-access-token')?.value ||
+                      request.cookies.get('supabase-auth-token')?.value;
+      }
+      
+      // Try all cookies that might contain session data
+      if (!cookieValue) {
+        for (const [name, cookie] of request.cookies.entries()) {
+          if (name.includes('auth') || name.includes('session') || name.startsWith('sb-')) {
+            cookieValue = cookie.value;
+            console.log('Middleware: Found potential auth cookie:', name);
+            break;
+          }
+        }
+      }
       
       if (cookieValue) {
         try {
