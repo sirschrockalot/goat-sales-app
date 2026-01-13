@@ -9,6 +9,7 @@ import logger from '@/lib/logger';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
 import { sendVictorySMS } from '@/lib/victoryNotification';
 import { getActiveMonitor, registerMonitor, startSignatureMonitoring } from '@/lib/signatureMonitor';
+import { supabaseAdmin } from '@/lib/supabase';
 
 interface DocuSignWebhookPayload {
   event: string; // 'envelope-sent', 'recipient-delivered', 'recipient-viewed', 'recipient-completed', etc.
@@ -76,8 +77,7 @@ export async function POST(request: NextRequest) {
       callId: data.callId,
     });
 
-    // Import Supabase client
-    const { supabaseAdmin } = await import('@/lib/supabase');
+    // Check Supabase client
     if (!supabaseAdmin) {
       logger.error('Supabase admin client not available');
       return NextResponse.json({ error: 'Database not available' }, { status: 500 });
@@ -169,7 +169,6 @@ async function handleRecipientDelivered(data: DocuSignWebhookPayload['data']) {
   if (data.callId) {
     try {
       // Get call data for walkthrough initialization
-      const { supabaseAdmin } = await import('@/lib/supabase');
       if (supabaseAdmin) {
         const { data: callData } = await supabaseAdmin
           .from('calls')
@@ -211,7 +210,6 @@ async function handleRecipientDelivered(data: DocuSignWebhookPayload['data']) {
       }
 
       // Update sandbox_battles if this is a training battle
-      const { supabaseAdmin } = await import('@/lib/supabase');
       if (supabaseAdmin) {
         const { error } = await supabaseAdmin
           .from('sandbox_battles')
