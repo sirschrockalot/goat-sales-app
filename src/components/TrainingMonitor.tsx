@@ -58,10 +58,14 @@ interface PersonaAnalytic {
   personaName: string;
   personaType: string;
   totalBattles: number;
-  successRate: number;
+  successRate: number; // BOTH verbal_yes_to_price AND document_status = 'completed' required
   averageScore: number;
-  verbalYesCount: number;
+  verbalYesCount: number; // Primary Success count (verbal_yes_to_price)
+  ultimateSuccessCount?: number; // Ultimate Success count (signed contracts)
+  successfulBattles?: number; // Battles that met BOTH criteria
   averageSuccessScore: number;
+  averageTechnicalAssistance?: number;
+  verbalYesMemorandumCount?: number; // Legacy field for backward compatibility
 }
 
 interface KillSwitchStatus {

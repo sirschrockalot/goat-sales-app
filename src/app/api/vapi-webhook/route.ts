@@ -239,6 +239,24 @@ export async function POST(request: NextRequest) {
     const manuallyTriggered = callData.metadata?.manuallyTriggered || false;
     const roleReversal = callData.metadata?.roleReversal === true || callData.metadata?.learningMode === true;
 
+    // Real-time pillar audit (for live calls)
+    // Audit transcript for pillar compliance
+    if (transcript && callData.id) {
+      try {
+        const { auditPillars } = await import('@/lib/pillarAudit');
+        const auditResult = auditPillars(callData.id, transcript);
+        
+        logger.debug('Pillar audit completed', {
+          callId: callData.id,
+          allPillarsMet: auditResult.allPillarsMet,
+          flags: auditResult.flags,
+          missingPillars: auditResult.missingPillars,
+        });
+      } catch (error) {
+        logger.warn('Error auditing pillars in webhook', { error, callId: callData.id });
+      }
+    }
+
     // If manually triggered and missing userId, try to get from auth
     if (!userId && manuallyTriggered) {
       try {

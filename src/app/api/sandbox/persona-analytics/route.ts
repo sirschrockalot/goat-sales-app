@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
       ((personas as any[]) || []).map(async (persona: any) => {
         const { data: battles, error: battlesError } = await supabaseAdmin
           .from('sandbox_battles')
-          .select('referee_score, verbal_yes_to_memorandum, success_score')
+          .select('referee_score, verbal_yes_to_memorandum, verbal_yes_to_price, document_status, success_score, technical_assistance_score')
           .eq('persona_id', persona.id);
 
         const battlesData = (battles as any[]) || [];
@@ -70,22 +70,44 @@ export async function GET(request: NextRequest) {
         }
 
         const totalBattles = battlesData.length;
-        const verbalYesCount = battlesData.filter((b: any) => b.verbal_yes_to_memorandum).length;
-        const successRate = (verbalYesCount / totalBattles) * 100;
+        
+        // NEW SUCCESS CRITERIA: Signature-First Model
+        // Success requires BOTH: verbal_yes_to_price === true AND document_status = 'completed'
+        const primarySuccessCount = battlesData.filter((b: any) => b.verbal_yes_to_price).length;
+        const ultimateSuccessCount = battlesData.filter((b: any) => b.document_status === 'completed').length;
+        
+        // Calculate success rate: BOTH criteria must be met
+        // A battle is successful ONLY if verbal_yes_to_price === true AND signature_status === 'completed'
+        const successfulBattles = battlesData.filter(
+          (b: any) => b.verbal_yes_to_price === true && b.document_status === 'completed'
+        ).length;
+        
+        const successRate = totalBattles > 0 ? (successfulBattles / totalBattles) * 100 : 0;
+        
+        // Legacy: Keep verbal_yes_to_memorandum for backward compatibility
+        const verbalYesMemorandumCount = battlesData.filter((b: any) => b.verbal_yes_to_memorandum).length;
+        
         const averageScore =
           battlesData.reduce((sum: number, b: any) => sum + (b.referee_score || 0), 0) / totalBattles;
         const averageSuccessScore =
           battlesData.reduce((sum: number, b: any) => sum + (b.success_score || 0), 0) / totalBattles;
+        const averageTechnicalAssistance =
+          battlesData.reduce((sum: number, b: any) => sum + (b.technical_assistance_score || 0), 0) / totalBattles;
 
         return {
           personaId: persona.id,
           personaName: persona.name,
           personaType: persona.persona_type,
           totalBattles,
-          successRate: Math.round(successRate * 10) / 10, // Round to 1 decimal
+          successRate: Math.round(successRate * 10) / 10, // Round to 1 decimal - BOTH criteria required
           averageScore: Math.round(averageScore * 10) / 10,
-          verbalYesCount,
+          verbalYesCount: primarySuccessCount, // Primary Success count (price agreement)
+          ultimateSuccessCount, // Ultimate Success count (signed contracts)
+          successfulBattles, // Battles that met BOTH criteria
           averageSuccessScore: Math.round(averageSuccessScore * 10) / 10,
+          averageTechnicalAssistance: Math.round(averageTechnicalAssistance * 10) / 10,
+          // Legacy fields for backward compatibility
+          verbalYesMemorandumCount,
         };
       })
     );

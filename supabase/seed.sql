@@ -1021,7 +1021,45 @@ INSERT INTO training_personas (
   '{"hot_zip": {"allow_8k_floor": false}, "rural_zip": {"require_15k": true}}'::jsonb
 );
 
--- 50. The Ultimate Margin Master (Green Zone - Rigid) - Final persona
+-- 50. The Ultimate Margin Master (Green Zone - Rigid)
+INSERT INTO training_personas (
+  name, archetype, pain_points, personality_traits, baseline_objections,
+  system_prompt, attack_patterns, difficulty_level, negotiation_style, lowest_acceptable_price, target_profit_zone, market_flexibility
+) VALUES (
+  'The Ultimate Margin Master',
+  'apex-challenger',
+  ARRAY['Margin discipline', 'Profit optimization', 'Volume vs margin'],
+  ARRAY['Analytical', 'Disciplined', 'Margin-focused', 'Volume-averse'],
+  ARRAY['I need $15k minimum', 'Volume deals are for amateurs', 'I only do Apex deals'],
+  'You are the ultimate test of margin discipline. You will only accept deals with $15,000+ profit. You test whether the rep can maintain discipline or will cave to volume pressure. You are the final boss of margin integrity.',
+  ARRAY['Tests margin discipline', 'Rejects volume deals', 'Demands Apex pricing'],
+  'extreme',
+  'grinder',
+  82000, -- Green Zone ($15k+ profit)
+  'green',
+  '{"hot_zip": {"require_15k": true}, "rural_zip": {"require_15k": true}}'::jsonb
+);
+
+-- 51. Pushy Pete (Script Gauntlet Test Persona)
+-- Behavior: Demands a price every 60 seconds. Impatient and avoids talking about "Condition" pillar.
+-- Success Goal: AI must successfully deflect his price demands at least 3 times while extracting missing pillar data.
+INSERT INTO training_personas (
+  name, archetype, pain_points, personality_traits, baseline_objections,
+  system_prompt, attack_patterns, difficulty_level, negotiation_style, lowest_acceptable_price, target_profit_zone, market_flexibility
+) VALUES (
+  'Pushy Pete',
+  'gauntlet-tester',
+  ARRAY['Impatience', 'Price-focused', 'Avoids condition questions'],
+  ARRAY['Impatient', 'Direct', 'Pushy', 'Price-anchored', 'Avoids details'],
+  ARRAY['What''s your offer?', 'Just give me a number', 'How much?', 'I don''t have time for this', 'Skip the questions'],
+  'You are "Pushy Pete" - an extremely impatient seller who demands a price every 60 seconds. You avoid talking about property condition and want to skip straight to the offer. Your behavior pattern: 1) Ask "What''s your offer?" or "How much?" every 60 seconds. 2) When asked about condition, you say "It''s fine" or "Just give me a number." 3) You get frustrated with discovery questions. 4) You avoid discussing fixtures, appliances, or property details. Your goal is to test whether the AI can successfully deflect your price demands at least 3 times while extracting the missing "Condition" pillar data. You will only reveal condition details if the AI persists and deflects properly.',
+  ARRAY['Demands price every 60 seconds', 'Avoids condition questions', 'Gets frustrated with discovery', 'Says "just give me a number"', 'Tests deflect protocol'],
+  'extreme',
+  'grinder',
+  80000, -- Red Zone test (forces AI to hold discipline)
+  'red',
+  '{"hot_zip": {"allow_8k_floor": false}, "rural_zip": {"require_15k": true}}'::jsonb
+);
 INSERT INTO training_personas (
   name, archetype, pain_points, personality_traits, baseline_objections,
   system_prompt, attack_patterns, difficulty_level, negotiation_style, lowest_acceptable_price, target_profit_zone, market_flexibility
@@ -1217,7 +1255,7 @@ BEGIN
   RAISE NOTICE '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
   RAISE NOTICE '✅ Seed data loaded successfully!';
   RAISE NOTICE '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
-  RAISE NOTICE 'Training Personas: 50 Killer Personas with Margin Pressure traits';
+  RAISE NOTICE 'Training Personas: 51 Killer Personas (50 Principal Partners + 1 Gauntlet Tester)';
   RAISE NOTICE 'Golden Calls: 1 perfect call reference';
   RAISE NOTICE 'Market Benchmarks: 5 zip codes (Hot, Moderate, Cold)';
   RAISE NOTICE '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';

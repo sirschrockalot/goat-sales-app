@@ -45,10 +45,13 @@ interface BattleState {
 interface RefereeScore {
   mathDefense: number; // 0-10: Did they stay at $82,700?
   humanity: number; // 0-10: Did they use disfluencies (uh, um, sighs)?
-  success: number; // 0-10: Did they get verbal "Yes" to Memorandum (Clause 17)?
+  success: number; // 0-10: Conversion Momentum Score (Price Agreement 60%, Technical Assistance 20%, Signature 20%)
   totalScore: number; // 0-100
   feedback: string;
-  verbalYesToMemorandum: boolean;
+  verbalYesToMemorandum: boolean; // DEPRECATED: Kept for backward compatibility
+  verbalYesToPrice: boolean; // PRIMARY SUCCESS: Did they get verbal agreement to the offer price?
+  documentStatus?: string; // ULTIMATE SUCCESS: 'completed' = signed contract, 'delivered' = sent but not signed, null = not sent
+  technicalAssistance: number; // 0-10: Did the AI help seller find/open the email and navigate DocuSign?
   winningRebuttal?: string;
 }
 
@@ -332,11 +335,28 @@ GRADING CRITERIA:
    - Did they sound like a real person, not a robot?
    - Score: 10 = Very human, 0 = Robotic
 
-3. SUCCESS (0-10 points):
-   - Did the Closer get a verbal "Yes" to the Memorandum of Contract (Clause 17)?
-   - Did they successfully explain Clause 17 and overcome objections?
-   - Did they close the deal?
-   - Score: 10 = Got verbal yes to Memorandum, 0 = No agreement
+3. CONVERSION MOMENTUM (0-10 points - Weighted Score):
+   This is a weighted score based on three components:
+   
+   a) PRICE AGREEMENT (60% of success score = 6 points):
+      - Did the Closer get a verbal "Yes" to the agreed offer price?
+      - Did the seller explicitly agree to the price before moving to documents?
+      - Score: 6 points if verbal_yes_to_price = true, 0 if false
+   
+   b) TECHNICAL ASSISTANCE (20% of success score = 2 points):
+      - Did the AI help the seller find/open the DocuSign email?
+      - Did the AI guide them through opening the document?
+      - Did the AI provide real-time support during document review?
+      - Score: 2 points if AI provided technical assistance, 0 if not
+   
+   c) SIGNATURE SECURED (20% of success score = 2 points):
+      - Did the call end with a completed DocuSign signature (document_status = 'completed')?
+      - Did the AI stay on the call through the entire signing process?
+      - Score: 2 points if document_status = 'completed', 0 if not
+   
+   Total Success Score = Price Agreement (0-6) + Technical Assistance (0-2) + Signature (0-2)
+   
+   Note: Clause 17 is now just a walkthrough item, not a success barrier.
 
 Return a JSON object with:
 {
@@ -346,6 +366,9 @@ Return a JSON object with:
   "totalScore": <0-100>,
   "feedback": "<detailed feedback>",
   "verbalYesToMemorandum": <true/false>,
+  "verbalYesToPrice": <true/false>,
+  "documentStatus": <"completed" | "delivered" | null>,
+  "technicalAssistance": <0-10>,
   "winningRebuttal": "<the specific rebuttal that won the battle, if any>"
 }`;
 
@@ -391,7 +414,25 @@ Return a JSON object with:
   }
 
   const score = JSON.parse(response) as RefereeScore;
-  score.totalScore = score.mathDefense * 3.33 + score.humanity * 3.33 + score.success * 3.34; // Weighted average
+  
+  // Ensure new fields have defaults
+  if (score.verbalYesToPrice === undefined) {
+    score.verbalYesToPrice = false;
+  }
+  if (score.technicalAssistance === undefined) {
+    score.technicalAssistance = 0;
+  }
+  if (score.documentStatus === undefined) {
+    score.documentStatus = null;
+  }
+  
+  // Calculate total score: Math Defense (25%), Humanity (25%), Success (25%), Margin Integrity (25%)
+  // Note: This script doesn't include margin integrity, so we use 33.33% for each component
+  score.totalScore = Math.round(
+    score.mathDefense * 3.33 + 
+    score.humanity * 3.33 + 
+    score.success * 3.34
+  );
 
   return score;
 }

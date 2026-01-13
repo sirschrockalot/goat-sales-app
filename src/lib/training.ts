@@ -40,11 +40,14 @@ interface BattleState {
 export interface RefereeScore {
   mathDefense: number; // 0-10: Did they stay at $82,700?
   humanity: number; // 0-10: Did they use disfluencies (uh, um, sighs)?
-  success: number; // 0-10: Did they get verbal "Yes" to Memorandum (Clause 17)?
+  success: number; // 0-10: Conversion Momentum Score (Price Agreement 60%, Technical Assistance 20%, Signature 20%)
   marginIntegrity: number; // 0-100: Weighted margin preservation score
   totalScore: number; // 0-100
   feedback: string;
-  verbalYesToMemorandum: boolean;
+  verbalYesToMemorandum: boolean; // DEPRECATED: Kept for backward compatibility
+  verbalYesToPrice: boolean; // PRIMARY SUCCESS: Did they get verbal agreement to the offer price?
+  documentStatus?: string; // ULTIMATE SUCCESS: 'completed' = signed contract, 'delivered' = sent but not signed, null = not sent
+  technicalAssistance: number; // 0-10: Did the AI help seller find/open the email and navigate DocuSign?
   winningRebuttal?: string;
   calculatedProfit?: number; // Profit calculated from transcript (ARV - Price - Repairs - Closing)
 }
@@ -296,11 +299,28 @@ GRADING CRITERIA:
    - Did they sound like a real person, not a robot?
    - Score: 10 = Very human, 0 = Robotic
 
-3. SUCCESS (0-10 points):
-   - Did the Closer get a verbal "Yes" to the Memorandum of Contract (Clause 17)?
-   - Did they successfully explain Clause 17 and overcome objections?
-   - Did they close the deal?
-   - Score: 10 = Got verbal yes to Memorandum, 0 = No agreement
+3. CONVERSION MOMENTUM (0-10 points - Weighted Score):
+   This is a weighted score based on three components:
+   
+   a) PRICE AGREEMENT (60% of success score = 6 points):
+      - Did the Closer get a verbal "Yes" to the agreed offer price?
+      - Did the seller explicitly agree to the price before moving to documents?
+      - Score: 6 points if verbal_yes_to_price = true, 0 if false
+   
+   b) TECHNICAL ASSISTANCE (20% of success score = 2 points):
+      - Did the AI help the seller find/open the DocuSign email?
+      - Did the AI guide them through opening the document?
+      - Did the AI provide real-time support during document review?
+      - Score: 2 points if AI provided technical assistance, 0 if not
+   
+   c) SIGNATURE SECURED (20% of success score = 2 points):
+      - Did the call end with a completed DocuSign signature (document_status = 'completed')?
+      - Did the AI stay on the call through the entire signing process?
+      - Score: 2 points if document_status = 'completed', 0 if not
+   
+   Total Success Score = Price Agreement (0-6) + Technical Assistance (0-2) + Signature (0-2)
+   
+   Note: Clause 17 is now just a walkthrough item, not a success barrier.
 
 4. MARGIN INTEGRITY (0-100 points - Weighted Score):
    Calculate the profit from the deal: Profit = ARV - Purchase Price - Repairs - Closing Costs (3% of purchase price)
@@ -330,6 +350,9 @@ Return a JSON object with:
   "totalScore": <0-100>,
   "feedback": "<detailed feedback>",
   "verbalYesToMemorandum": <true/false>,
+  "verbalYesToPrice": <true/false>,
+  "documentStatus": <"completed" | "delivered" | null>,
+  "technicalAssistance": <0-10>,
   "winningRebuttal": "<the specific rebuttal that won the battle, if any>"
 }`;
 
@@ -382,6 +405,17 @@ Return a JSON object with:
   // Ensure marginIntegrity is set (default to 0 if missing)
   if (score.marginIntegrity === undefined) {
     score.marginIntegrity = 0;
+  }
+  
+  // Ensure new fields have defaults
+  if (score.verbalYesToPrice === undefined) {
+    score.verbalYesToPrice = false;
+  }
+  if (score.technicalAssistance === undefined) {
+    score.technicalAssistance = 0;
+  }
+  if (score.documentStatus === undefined) {
+    score.documentStatus = null;
   }
   
   // Calculate total score: Math Defense (25%), Humanity (25%), Success (25%), Margin Integrity (25%)
@@ -500,6 +534,27 @@ export async function runBattle(
   const isThrottledForReferee = await shouldThrottle();
   const score = await refereeBattle(transcript, isThrottledForReferee);
 
+  // Validate success criteria: verbal_yes_to_price AND signature_status = 'completed'
+  const { validateSuccess } = await import('@/lib/contractWalkthrough');
+  const successValidation = validateSuccess(
+    score.verbalYesToPrice ?? false,
+    score.documentStatus || null
+  );
+
+  if (successValidation.isSuccessful) {
+    logger.info('✅ BATTLE SUCCESS: Both criteria met', {
+      verbalYesToPrice: score.verbalYesToPrice,
+      documentStatus: score.documentStatus,
+      personaId,
+    });
+  } else {
+    logger.info('⚠️ Battle incomplete - missing success criteria', {
+      missingCriteria: successValidation.missingCriteria,
+      verbalYesToPrice: score.verbalYesToPrice,
+      documentStatus: score.documentStatus,
+    });
+  }
+
   // Save battle to database
   // Ensure all integer fields are properly rounded
   // Reuse the supabaseClient from earlier in the function (line 426)
@@ -514,7 +569,10 @@ export async function runBattle(
     math_defense_score: Math.round(score.mathDefense), // Ensure integer
     humanity_score: Math.round(score.humanity), // Ensure integer
     success_score: Math.round(score.success), // Ensure integer
-    verbal_yes_to_memorandum: score.verbalYesToMemorandum,
+    verbal_yes_to_memorandum: score.verbalYesToMemorandum, // DEPRECATED: Kept for backward compatibility
+    verbal_yes_to_price: score.verbalYesToPrice ?? false, // PRIMARY SUCCESS
+    document_status: score.documentStatus || null, // ULTIMATE SUCCESS: 'completed' = signed
+    technical_assistance_score: Math.round(score.technicalAssistance || 0),
     winning_rebuttal: score.winningRebuttal || null,
     turns: battleState.turn,
     token_usage: battleState.tokenUsage.total,
