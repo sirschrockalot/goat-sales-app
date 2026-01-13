@@ -8,25 +8,32 @@ import { getAmbientNoiseConfig } from '@/lib/vapiConfig';
 
 // Logger - use conditional import to avoid winston in client bundles
 const getLogger = () => {
-  if (typeof window === 'undefined') {
-    // Server-side: use winston logger (dynamic import to avoid bundling in client)
-    try {
-      return require('./logger').default;
-    } catch {
-      // Fallback to console if logger fails to load
-      return {
-        error: (msg: string, meta?: any) => console.error(`[ERROR] ${msg}`, meta),
-        info: (msg: string, meta?: any) => console.log(`[INFO] ${msg}`, meta),
-        warn: (msg: string, meta?: any) => console.warn(`[WARN] ${msg}`, meta),
-      };
-    }
-  }
-  // Client-side: use console
-  return {
+  // Base logger object with all required methods
+  const baseLogger = {
     error: (msg: string, meta?: any) => console.error(`[ERROR] ${msg}`, meta),
     info: (msg: string, meta?: any) => console.log(`[INFO] ${msg}`, meta),
     warn: (msg: string, meta?: any) => console.warn(`[WARN] ${msg}`, meta),
+    debug: (msg: string, meta?: any) => console.log(`[DEBUG] ${msg}`, meta),
   };
+
+  if (typeof window === 'undefined') {
+    // Server-side: use winston logger (dynamic import to avoid bundling in client)
+    try {
+      const winstonLogger = require('./logger').default;
+      // Ensure all methods exist, fallback to baseLogger if missing
+      return {
+        error: winstonLogger.error || baseLogger.error,
+        info: winstonLogger.info || baseLogger.info,
+        warn: winstonLogger.warn || baseLogger.warn,
+        debug: winstonLogger.debug || baseLogger.debug,
+      };
+    } catch {
+      // Fallback to console if logger fails to load
+      return baseLogger;
+    }
+  }
+  // Client-side: use console
+  return baseLogger;
 };
 const logger = getLogger();
 

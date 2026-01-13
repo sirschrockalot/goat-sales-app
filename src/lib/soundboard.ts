@@ -10,6 +10,7 @@ const logger = typeof window === 'undefined'
       error: (msg: string, meta?: any) => console.error(`[ERROR] ${msg}`, meta),
       info: (msg: string, meta?: any) => console.log(`[INFO] ${msg}`, meta),
       warn: (msg: string, meta?: any) => console.warn(`[WARN] ${msg}`, meta),
+      debug: (msg: string, meta?: any) => console.log(`[DEBUG] ${msg}`, meta),
     };
 
 class Soundboard {
