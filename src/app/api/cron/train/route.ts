@@ -15,7 +15,10 @@ import { isKillSwitchActive } from '@/lib/killSwitchUtils';
 // Configuration
 const DEFAULT_BATCH_SIZE = 5; // Number of battles per cron execution
 const MAX_BATCH_SIZE = 10; // Maximum allowed batch size
-const MAX_EXECUTION_TIME_MS = 25_000; // 25 seconds (Heroku timeout is 30s, leave buffer)
+// Heroku has a 30-second timeout for web requests, but we can use longer for background tasks
+// For GET endpoint, we'll use 2.5 minutes to allow battles to complete
+// Note: This may still timeout on Heroku, but will work better than 25 seconds
+const MAX_EXECUTION_TIME_MS = 150_000; // 2.5 minutes (150 seconds)
 
 interface TrainingBatchResult {
   battlesCompleted: number;
