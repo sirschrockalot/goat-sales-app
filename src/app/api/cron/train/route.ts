@@ -131,30 +131,30 @@ async function runTrainingBatch(batchSize: number): Promise<TrainingBatchResult>
     const appConfig = getAppConfig();
 
     // Dynamically import runBattleLoop from root scripts (server-side only)
-    // Use tsx to load TypeScript files at runtime
+    // Note: In production, scripts need to be compiled or use a runtime TypeScript loader
     const projectRoot = process.cwd();
-    const autonomousBattlePath = path.join(projectRoot, 'scripts', 'autonomousBattle.ts');
     
-    // Register tsx loader for TypeScript files
-    try {
-      // Try to use tsx to load TypeScript file
-      const { register } = await import('tsx/esm/api');
-      register();
-    } catch {
-      // tsx might not be available, will try direct import
-    }
-    
-    // Import the TypeScript file
+    // Try to import the script - use multiple fallback strategies
     let autonomousBattleModule: any;
+    const importPath = path.join(projectRoot, 'scripts', 'autonomousBattle.js');
+    const fileUrl = `file://${importPath.replace(/\\/g, '/')}`;
+    
     try {
-      const fileUrl = `file://${autonomousBattlePath}`;
-      autonomousBattleModule = await import(fileUrl);
+      autonomousBattleModule = await (new Function('return import("' + fileUrl + '")'))();
     } catch {
-      // Fallback: try relative path
+      // Fallback: try TypeScript file with tsx (if available at runtime)
       try {
-        autonomousBattleModule = await import('../../../scripts/autonomousBattle.ts');
+        const tsPath = path.join(projectRoot, 'scripts', 'autonomousBattle.ts');
+        const tsUrl = `file://${tsPath.replace(/\\/g, '/')}`;
+        // Try importing with .ts extension (may work if tsx is registered)
+        autonomousBattleModule = await (new Function('return import("' + tsUrl + '")'))();
       } catch {
-        throw new Error('Failed to import autonomousBattle script. Ensure tsx is available and scripts directory is accessible.');
+        // Last resort: relative path
+        try {
+          autonomousBattleModule = await (new Function('return import("../../../scripts/autonomousBattle.js")'))();
+        } catch {
+          throw new Error('Training script not accessible. Scripts directory may need to be compiled for production.');
+        }
       }
     }
     
