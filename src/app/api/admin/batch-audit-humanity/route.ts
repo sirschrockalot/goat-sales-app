@@ -234,7 +234,7 @@ export async function POST(request: NextRequest) {
         audited: 0,
         errors: 0,
         dryRun: true,
-        battleIds: battles.map((b) => b.id),
+        battleIds: (battles || []).map((b: any) => b.id),
         message: `DRY RUN: Would audit ${battles.length} battles`,
       });
     }
@@ -249,7 +249,7 @@ export async function POST(request: NextRequest) {
       error?: string;
     }> = [];
 
-    for (const battle of battles) {
+    for (const battle of (battles || [])) {
       try {
         if (!battle.transcript || battle.transcript.trim().length === 0) {
           logger.warn('Skipping battle with empty transcript', { battleId: battle.id });
