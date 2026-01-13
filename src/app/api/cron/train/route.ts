@@ -348,9 +348,22 @@ export async function POST(request: NextRequest) {
 
     // Run training in background to avoid timeout
     // Return immediately with "started" status
-    runTrainingBatch(batchSize).catch((error) => {
-      logger.error('Error in background training batch', { error, batchSize });
-    });
+    runTrainingBatch(batchSize)
+      .then((result) => {
+        logger.info('Background training batch completed', {
+          batchId: result.batchId,
+          battlesCompleted: result.battlesCompleted,
+          totalCost: result.totalCost,
+          errors: result.errors,
+        });
+      })
+      .catch((error) => {
+        logger.error('Error in background training batch', {
+          error: error.message || String(error),
+          stack: error.stack,
+          batchSize,
+        });
+      });
 
     return NextResponse.json({
       success: true,

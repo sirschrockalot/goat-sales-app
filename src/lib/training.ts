@@ -673,7 +673,15 @@ export async function runBattleLoop(
         killSwitchTriggered = true;
         break;
       }
-      logger.error('Error in battle', { persona: (persona as any).name, error });
+      logger.error('Error in battle', {
+        persona: (persona as any).name,
+        personaId: (persona as any).id,
+        error: error.message || String(error),
+        stack: error.stack,
+        totalCost,
+      });
+      // Continue with next battle unless it's a critical error
+      // Don't break the loop - let other battles continue
     }
   }
 
