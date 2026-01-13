@@ -10,8 +10,7 @@
   "scripts": {
     "dev": "next dev",
     "dev:local": "NODE_ENV=development next dev",
-    "build": "npm run build:scripts && next build",
-    "build:scripts": "tsx scripts/compile-scripts.ts || echo 'Script compilation skipped'",
+    "build": "next build",
     "start": "next start",
     "lint": "next lint",
     "supabase:start": "supabase start",
