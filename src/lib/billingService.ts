@@ -861,7 +861,8 @@ export async function getVercelUsage(): Promise<VercelUsage> {
     // For now, return empty usage data
     // TODO: Implement Heroku billing API integration
     return {
-      ...budgetInfo,
+      budgetCap: HOSTING_BUDGET_CAP,
+      period: new Date().toISOString().slice(0, 7), // YYYY-MM format
       currentUsage: 0,
       remainingBudget: HOSTING_BUDGET_CAP,
       percentageUsed: 0,
