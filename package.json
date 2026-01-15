@@ -73,7 +73,9 @@
     "seed:sandbox": "EXPLICIT_ENV=sandbox tsx scripts/seed-sandbox.ts",
     "seed:instructions": "tsx scripts/execute-seed-via-dashboard.ts",
     "migration:sandbox": "EXPLICIT_ENV=sandbox tsx scripts/execute-sandbox-migration.ts",
-    "migration:verify": "EXPLICIT_ENV=sandbox tsx scripts/verify-migration.ts"
+    "migration:verify": "EXPLICIT_ENV=sandbox tsx scripts/verify-migration.ts",
+    "train": "tsx scripts/aiTrainer.ts",
+    "ai:train": "tsx scripts/aiTrainer.ts"
   },
   "dependencies": {
     "@react-email/components": "^0.0.25",
