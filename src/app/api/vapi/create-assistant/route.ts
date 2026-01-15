@@ -14,6 +14,15 @@ import { getElevenLabsCloserConfig, getElevenLabsSellerConfig, getDeepgramSTTCon
 import { getRegionalVoiceConfig, getVoicePersonaLabel } from '@/lib/voiceRegions';
 import { getOptimalModel, determineSessionType, formatModelSelectionForLogging } from '@/lib/modelSwitcher';
 import { prepareCallWithNeighborhoodContext } from '@/lib/neighborhoodPulse';
+import {
+  generateConfigHash,
+  getCachedAssistant,
+  cacheAssistant,
+  verifyCachedAssistant,
+  updateAssistantDynamicContent,
+  invalidateCacheEntry,
+  type CacheableConfig,
+} from '@/lib/assistantCache';
 import logger from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
@@ -122,7 +131,7 @@ export async function POST(request: NextRequest) {
     // Check if we should use a pre-created assistant ID for acquisitions gauntlet
     if (gauntletLevel && validPersonaMode === 'acquisition') {
       const acquisitionsAssistantId = process.env.ACQUISITIONS_ASSISTANT_ID;
-      
+
       if (acquisitionsAssistantId) {
         // Use the pre-created "Hard-to-Get" Acquisitions Assistant
         // Return the assistant ID without creating a new one
@@ -137,6 +146,85 @@ export async function POST(request: NextRequest) {
             voice: persona.voice,
           },
         });
+      }
+    }
+
+    // Check assistant cache for reusable assistant
+    // Cache is based on configuration parameters that don't change per-call
+    const isRoleReversalForCache = roleReversal === true || roleReversal === 'true';
+    const cacheableConfig: CacheableConfig = {
+      personaMode: validPersonaMode,
+      gauntletLevel: gauntletLevel ?? null,
+      difficulty: gauntletLevel ? null : (difficulty ? parseInt(difficulty) : null),
+      roleReversal: isRoleReversalForCache,
+      exitStrategy: exitStrategy ?? null,
+      propertyLocation: propertyLocation ?? null,
+      apexLevel: apexLevel ?? 'standard',
+      battleTestMode: battleTestMode === true || battleTestMode === 'true',
+    };
+
+    const configHash = generateConfigHash(cacheableConfig);
+    logger.debug('Generated config hash for cache lookup', { configHash, cacheableConfig });
+
+    // Try to get cached assistant
+    const cachedAssistant = await getCachedAssistant(configHash);
+
+    if (cachedAssistant) {
+      // Verify the cached assistant still exists in VAPI
+      const isValid = await verifyCachedAssistant(cachedAssistant.assistantId);
+
+      if (isValid) {
+        logger.info('Using cached assistant', {
+          assistantId: cachedAssistant.assistantId,
+          configHash,
+          useCount: cachedAssistant.useCount,
+        });
+
+        // Update dynamic content if sellerName or propertyAddress provided
+        if (sellerName || propertyAddress) {
+          const updateSuccess = await updateAssistantDynamicContent(
+            cachedAssistant.assistantId,
+            { sellerName, propertyAddress, currentGate, userId },
+            persona.systemPrompt
+          );
+
+          if (!updateSuccess) {
+            logger.warn('Failed to update dynamic content, invalidating cache', { configHash });
+            await invalidateCacheEntry(configHash);
+            // Fall through to create new assistant
+          } else {
+            return NextResponse.json({
+              success: true,
+              assistantId: cachedAssistant.assistantId,
+              controlUrl: undefined,
+              cached: true,
+              persona: {
+                ...(gauntletLevel ? { gauntletLevel } : { difficulty }),
+                personaMode: validPersonaMode,
+                model: persona.model,
+                voice: persona.voice,
+              },
+            });
+          }
+        } else {
+          // No dynamic content to update, use as-is
+          return NextResponse.json({
+            success: true,
+            assistantId: cachedAssistant.assistantId,
+            controlUrl: undefined,
+            cached: true,
+            persona: {
+              ...(gauntletLevel ? { gauntletLevel } : { difficulty }),
+              personaMode: validPersonaMode,
+              model: persona.model,
+              voice: persona.voice,
+            },
+          });
+        }
+      } else {
+        // Cached assistant no longer exists in VAPI, invalidate cache
+        logger.info('Cached assistant no longer valid, invalidating', { configHash });
+        await invalidateCacheEntry(configHash);
       }
     }
 
@@ -642,10 +730,21 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Cache the newly created assistant for future reuse
+    // This happens asynchronously and doesn't block the response
+    cacheAssistant(assistant.id, cacheableConfig, configHash).catch((cacheError) => {
+      logger.warn('Failed to cache assistant (non-blocking)', {
+        assistantId: assistant.id,
+        configHash,
+        error: cacheError,
+      });
+    });
+
     return NextResponse.json({
       success: true,
       assistantId: assistant.id,
       controlUrl: assistant.controlUrl,
+      cached: false,
       persona: {
         ...(gauntletLevel ? { gauntletLevel } : { difficulty }),
         personaMode: validPersonaMode,
