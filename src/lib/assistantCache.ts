@@ -36,6 +36,29 @@ const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 // Maximum cache entries to prevent unbounded growth
 const MAX_CACHE_ENTRIES = 500;
 
+// Database row type for vapi_assistant_cache table
+// (Table created via migration, not yet in generated Supabase types)
+interface VapiAssistantCacheRow {
+  id: string;
+  assistant_id: string;
+  config_hash: string;
+  persona_mode: string;
+  gauntlet_level: number | null;
+  difficulty: number | null;
+  role_reversal: boolean;
+  exit_strategy: string | null;
+  property_location: string | null;
+  apex_level: string | null;
+  battle_test_mode: boolean;
+  created_at: string;
+  last_used_at: string;
+  use_count: number;
+}
+
+// Helper to get typed access to the cache table
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const getCacheTable = () => supabaseAdmin?.from('vapi_assistant_cache' as any) as any;
+
 export interface CacheableConfig {
   personaMode: 'acquisition' | 'disposition';
   gauntletLevel?: number | null;
@@ -141,8 +164,7 @@ export async function getCachedAssistant(configHash: string): Promise<CachedAssi
   }
 
   try {
-    const { data, error } = await supabaseAdmin
-      .from('vapi_assistant_cache')
+    const { data, error } = await getCacheTable()
       .select('*')
       .eq('config_hash', configHash)
       .single();
@@ -151,8 +173,10 @@ export async function getCachedAssistant(configHash: string): Promise<CachedAssi
       return null;
     }
 
+    const cacheEntry = data as VapiAssistantCacheRow;
+
     // Check if cache entry is still valid (within TTL)
-    const createdAt = new Date(data.created_at).getTime();
+    const createdAt = new Date(cacheEntry.created_at).getTime();
     const now = Date.now();
 
     if (now - createdAt > CACHE_TTL_MS) {
@@ -162,29 +186,28 @@ export async function getCachedAssistant(configHash: string): Promise<CachedAssi
     }
 
     // Update last_used_at and use_count
-    await supabaseAdmin
-      .from('vapi_assistant_cache')
+    await getCacheTable()
       .update({
         last_used_at: new Date().toISOString(),
-        use_count: (data.use_count || 0) + 1,
+        use_count: (cacheEntry.use_count || 0) + 1,
       })
-      .eq('id', data.id);
+      .eq('id', cacheEntry.id);
 
     return {
-      id: data.id,
-      assistantId: data.assistant_id,
-      configHash: data.config_hash,
-      personaMode: data.persona_mode,
-      gauntletLevel: data.gauntlet_level,
-      difficulty: data.difficulty,
-      roleReversal: data.role_reversal,
-      exitStrategy: data.exit_strategy,
-      propertyLocation: data.property_location,
-      apexLevel: data.apex_level,
-      battleTestMode: data.battle_test_mode,
-      createdAt: data.created_at,
-      lastUsedAt: data.last_used_at,
-      useCount: data.use_count,
+      id: cacheEntry.id,
+      assistantId: cacheEntry.assistant_id,
+      configHash: cacheEntry.config_hash,
+      personaMode: cacheEntry.persona_mode,
+      gauntletLevel: cacheEntry.gauntlet_level,
+      difficulty: cacheEntry.difficulty,
+      roleReversal: cacheEntry.role_reversal,
+      exitStrategy: cacheEntry.exit_strategy,
+      propertyLocation: cacheEntry.property_location,
+      apexLevel: cacheEntry.apex_level,
+      battleTestMode: cacheEntry.battle_test_mode,
+      createdAt: cacheEntry.created_at,
+      lastUsedAt: cacheEntry.last_used_at,
+      useCount: cacheEntry.use_count,
     };
   } catch (error) {
     logger.error('Error looking up cached assistant', { error, configHash });
@@ -207,8 +230,7 @@ export async function cacheAssistant(
 
   try {
     // Check cache size and cleanup if needed
-    const { count } = await supabaseAdmin
-      .from('vapi_assistant_cache')
+    const { count } = await getCacheTable()
       .select('*', { count: 'exact', head: true });
 
     if (count && count >= MAX_CACHE_ENTRIES) {
@@ -216,8 +238,7 @@ export async function cacheAssistant(
     }
 
     // Insert new cache entry
-    const { error } = await supabaseAdmin
-      .from('vapi_assistant_cache')
+    const { error } = await getCacheTable()
       .upsert({
         assistant_id: assistantId,
         config_hash: configHash,
@@ -254,16 +275,14 @@ async function cleanupOldestEntries(count: number): Promise<void> {
 
   try {
     // Get oldest entries
-    const { data: oldestEntries } = await supabaseAdmin
-      .from('vapi_assistant_cache')
+    const { data: oldestEntries } = await getCacheTable()
       .select('id')
       .order('last_used_at', { ascending: true })
       .limit(count);
 
     if (oldestEntries && oldestEntries.length > 0) {
-      const idsToDelete = oldestEntries.map(e => e.id);
-      await supabaseAdmin
-        .from('vapi_assistant_cache')
+      const idsToDelete = (oldestEntries as { id: string }[]).map(e => e.id);
+      await getCacheTable()
         .delete()
         .in('id', idsToDelete);
 
@@ -283,8 +302,7 @@ export async function cleanupExpiredEntries(): Promise<number> {
   try {
     const expiryDate = new Date(Date.now() - CACHE_TTL_MS).toISOString();
 
-    const { data, error } = await supabaseAdmin
-      .from('vapi_assistant_cache')
+    const { data, error } = await getCacheTable()
       .delete()
       .lt('created_at', expiryDate)
       .select('id');
@@ -294,7 +312,7 @@ export async function cleanupExpiredEntries(): Promise<number> {
       return 0;
     }
 
-    const deletedCount = data?.length || 0;
+    const deletedCount = (data as { id: string }[] | null)?.length || 0;
     if (deletedCount > 0) {
       logger.info('Cleaned up expired cache entries', { count: deletedCount });
     }
@@ -414,8 +432,7 @@ export async function invalidateCacheEntry(configHash: string): Promise<void> {
   if (!supabaseAdmin) return;
 
   try {
-    await supabaseAdmin
-      .from('vapi_assistant_cache')
+    await getCacheTable()
       .delete()
       .eq('config_hash', configHash);
 
@@ -446,12 +463,13 @@ export async function getCacheStats(): Promise<{
   }
 
   try {
-    const { data, count } = await supabaseAdmin
-      .from('vapi_assistant_cache')
+    const { data, count } = await getCacheTable()
       .select('use_count, created_at', { count: 'exact' })
       .order('created_at', { ascending: true });
 
-    if (!data || data.length === 0) {
+    const entries = data as { use_count: number; created_at: string }[] | null;
+
+    if (!entries || entries.length === 0) {
       return {
         totalEntries: 0,
         hitRate: 0,
@@ -461,19 +479,19 @@ export async function getCacheStats(): Promise<{
       };
     }
 
-    const totalUseCount = data.reduce((sum, entry) => sum + (entry.use_count || 0), 0);
-    const avgUseCount = totalUseCount / data.length;
+    const totalUseCount = entries.reduce((sum, entry) => sum + (entry.use_count || 0), 0);
+    const avgUseCount = totalUseCount / entries.length;
 
     // Hit rate: entries with use_count > 1 vs total
-    const entriesWithReuse = data.filter(e => (e.use_count || 0) > 1).length;
-    const hitRate = entriesWithReuse / data.length;
+    const entriesWithReuse = entries.filter(e => (e.use_count || 0) > 1).length;
+    const hitRate = entriesWithReuse / entries.length;
 
     return {
-      totalEntries: count || data.length,
+      totalEntries: count || entries.length,
       hitRate,
       avgUseCount,
-      oldestEntry: data[0]?.created_at || null,
-      newestEntry: data[data.length - 1]?.created_at || null,
+      oldestEntry: entries[0]?.created_at || null,
+      newestEntry: entries[entries.length - 1]?.created_at || null,
     };
   } catch (error) {
     logger.error('Error getting cache stats', { error });
