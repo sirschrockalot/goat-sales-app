@@ -57,6 +57,7 @@ function displayMainMenu(): void {
   console.log(chalk.green('  [4]') + chalk.white(' Audit & Quality'));
   console.log(chalk.green('  [5]') + chalk.white(' Configuration'));
   console.log(chalk.green('  [6]') + chalk.white(' Status & Reports'));
+  console.log(chalk.green('  [7]') + chalk.white(' Call Analysis') + chalk.magenta(' ★ NEW'));
   console.log('');
   console.log(chalk.red('  [0]') + chalk.white(' Exit'));
   console.log('');
@@ -170,6 +171,28 @@ function displayStatusMenu(): void {
   console.log(chalk.green('  [2]') + chalk.white(' Apex Insights') + chalk.gray(' - AI performance analytics'));
   console.log(chalk.green('  [3]') + chalk.white(' Check VAPI Assistants') + chalk.gray(' - List active assistants'));
   console.log(chalk.green('  [4]') + chalk.white(' Check ElevenLabs Voices') + chalk.gray(' - List available voices'));
+  console.log('');
+  console.log(chalk.yellow('  [b]') + chalk.white(' Back to Main Menu'));
+  console.log('');
+  console.log(chalk.gray('  ─────────────────────────────────────────'));
+}
+
+/**
+ * Display call analysis submenu
+ */
+function displayCallAnalysisMenu(): void {
+  console.log(CLEAR_SCREEN);
+  console.log(chalk.cyan.bold('\n  CALL ANALYSIS FOR AI TRAINING'));
+  console.log(chalk.gray('  ─────────────────────────────────────────'));
+  console.log('');
+  console.log(chalk.magenta('  Analyze real calls to extract training insights'));
+  console.log(chalk.magenta('  (rebuttals, techniques, objection handling)'));
+  console.log('');
+  console.log(chalk.green('  [1]') + chalk.white(' Analyze Acquisition Calls') + chalk.gray(' - Extract seller handling techniques'));
+  console.log(chalk.green('  [2]') + chalk.white(' Analyze Disposition Calls') + chalk.gray(' - Extract buyer handling techniques'));
+  console.log(chalk.green('  [3]') + chalk.white(' View Analysis Stats') + chalk.gray(' - See what\'s been analyzed'));
+  console.log(chalk.green('  [4]') + chalk.white(' Find Unanalyzed Calls') + chalk.gray(' - List calls awaiting analysis'));
+  console.log(chalk.green('  [5]') + chalk.white(' Generate Training Injection') + chalk.gray(' - Create prompt from insights'));
   console.log('');
   console.log(chalk.yellow('  [b]') + chalk.white(' Back to Main Menu'));
   console.log('');
@@ -486,6 +509,210 @@ async function handleStatusMenu(rl: readline.Interface): Promise<boolean> {
 }
 
 /**
+ * Call the analyze-call API
+ */
+async function callAnalyzeAPI(
+  action: string,
+  mode?: string,
+  body?: any
+): Promise<any> {
+  const apiUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const url = new URL(`${apiUrl}/api/admin/analyze-call`);
+
+  if (action) url.searchParams.set('action', action);
+  if (mode) url.searchParams.set('mode', mode);
+
+  try {
+    const options: RequestInit = {
+      method: body ? 'POST' : 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    };
+    if (body) {
+      options.body = JSON.stringify(body);
+    }
+
+    const response = await fetch(url.toString(), options);
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'API call failed');
+    }
+
+    return data;
+  } catch (error) {
+    console.log(chalk.red(`  API Error: ${(error as Error).message}`));
+    return null;
+  }
+}
+
+/**
+ * Handle call analysis menu selection
+ */
+async function handleCallAnalysisMenu(rl: readline.Interface): Promise<boolean> {
+  displayCallAnalysisMenu();
+
+  return new Promise((resolve) => {
+    rl.question(chalk.cyan('\n  Select option: '), async (answer) => {
+      switch (answer.toLowerCase()) {
+        case '1':
+          // Analyze Acquisition Calls
+          console.log(chalk.yellow('\n  Finding top unanalyzed acquisition calls...'));
+          const acqCalls = await callAnalyzeAPI('unanalyzed', 'acquisition');
+          if (acqCalls && acqCalls.calls && acqCalls.calls.length > 0) {
+            console.log(chalk.green(`  Found ${acqCalls.calls.length} calls to analyze`));
+            console.log('');
+            acqCalls.calls.forEach((call: any, idx: number) => {
+              console.log(chalk.gray(`    ${idx + 1}. Call ID: ${call.id} (Score: ${call.goat_score})`));
+            });
+
+            const confirmAnswer = await new Promise<string>((res) => {
+              rl.question(chalk.cyan('\n  Analyze these calls? (y/n): '), res);
+            });
+
+            if (confirmAnswer.toLowerCase() === 'y') {
+              console.log(chalk.yellow('\n  Analyzing calls... (this may take a minute)'));
+              const callIds = acqCalls.calls.map((c: any) => c.id);
+              const result = await callAnalyzeAPI('', '', { callIds, mode: 'acquisition' });
+              if (result && result.results) {
+                console.log(chalk.green(`\n  ✓ Analyzed ${result.analyzed} calls`));
+                result.results.forEach((r: any) => {
+                  console.log(chalk.gray(`    - ${r.callId}: Score ${r.overallScore}, ${r.insightCount} insights`));
+                });
+              }
+            }
+          } else {
+            console.log(chalk.gray('  No unanalyzed acquisition calls found (or score too low)'));
+          }
+          await waitForEnter(rl);
+          resolve(true);
+          break;
+
+        case '2':
+          // Analyze Disposition Calls
+          console.log(chalk.yellow('\n  Finding top unanalyzed disposition calls...'));
+          const dispoCalls = await callAnalyzeAPI('unanalyzed', 'disposition');
+          if (dispoCalls && dispoCalls.calls && dispoCalls.calls.length > 0) {
+            console.log(chalk.green(`  Found ${dispoCalls.calls.length} calls to analyze`));
+            console.log('');
+            dispoCalls.calls.forEach((call: any, idx: number) => {
+              console.log(chalk.gray(`    ${idx + 1}. Call ID: ${call.id} (Score: ${call.goat_score})`));
+            });
+
+            const confirmAnswer = await new Promise<string>((res) => {
+              rl.question(chalk.cyan('\n  Analyze these calls? (y/n): '), res);
+            });
+
+            if (confirmAnswer.toLowerCase() === 'y') {
+              console.log(chalk.yellow('\n  Analyzing calls... (this may take a minute)'));
+              const callIds = dispoCalls.calls.map((c: any) => c.id);
+              const result = await callAnalyzeAPI('', '', { callIds, mode: 'disposition' });
+              if (result && result.results) {
+                console.log(chalk.green(`\n  ✓ Analyzed ${result.analyzed} calls`));
+                result.results.forEach((r: any) => {
+                  console.log(chalk.gray(`    - ${r.callId}: Score ${r.overallScore}, ${r.insightCount} insights`));
+                });
+              }
+            }
+          } else {
+            console.log(chalk.gray('  No unanalyzed disposition calls found (or score too low)'));
+          }
+          await waitForEnter(rl);
+          resolve(true);
+          break;
+
+        case '3':
+          // View Analysis Stats
+          console.log(chalk.yellow('\n  Fetching analysis statistics...'));
+          const acqStats = await callAnalyzeAPI('stats', 'acquisition');
+          const dispoStats = await callAnalyzeAPI('stats', 'disposition');
+
+          console.log('');
+          console.log(chalk.cyan.bold('  ACQUISITION ANALYSIS:'));
+          if (acqStats && acqStats.stats) {
+            console.log(chalk.white(`    Calls Analyzed: ${acqStats.stats.totalAnalyzed}`));
+            console.log(chalk.white(`    Total Insights: ${acqStats.stats.totalInsights}`));
+            console.log(chalk.white(`    Avg Score: ${acqStats.stats.avgScore.toFixed(1)}`));
+            if (acqStats.stats.topCategories.length > 0) {
+              console.log(chalk.gray('    Top Categories:'));
+              acqStats.stats.topCategories.slice(0, 5).forEach((c: any) => {
+                console.log(chalk.gray(`      - ${c.category}: ${c.count} insights`));
+              });
+            }
+          }
+
+          console.log('');
+          console.log(chalk.cyan.bold('  DISPOSITION ANALYSIS:'));
+          if (dispoStats && dispoStats.stats) {
+            console.log(chalk.white(`    Calls Analyzed: ${dispoStats.stats.totalAnalyzed}`));
+            console.log(chalk.white(`    Total Insights: ${dispoStats.stats.totalInsights}`));
+            console.log(chalk.white(`    Avg Score: ${dispoStats.stats.avgScore.toFixed(1)}`));
+            if (dispoStats.stats.topCategories.length > 0) {
+              console.log(chalk.gray('    Top Categories:'));
+              dispoStats.stats.topCategories.slice(0, 5).forEach((c: any) => {
+                console.log(chalk.gray(`      - ${c.category}: ${c.count} insights`));
+              });
+            }
+          }
+          await waitForEnter(rl);
+          resolve(true);
+          break;
+
+        case '4':
+          // Find Unanalyzed Calls
+          console.log(chalk.yellow('\n  Finding unanalyzed calls...'));
+
+          const modeAnswer = await new Promise<string>((res) => {
+            rl.question(chalk.cyan('  Mode? [1] Acquisition [2] Disposition: '), res);
+          });
+          const selectedMode = modeAnswer === '2' ? 'disposition' : 'acquisition';
+
+          const unanalyzed = await callAnalyzeAPI('unanalyzed', selectedMode);
+          if (unanalyzed && unanalyzed.calls) {
+            console.log(chalk.green(`\n  Found ${unanalyzed.count} unanalyzed ${selectedMode} calls:`));
+            unanalyzed.calls.forEach((call: any, idx: number) => {
+              console.log(chalk.gray(`    ${idx + 1}. ${call.id} - GOAT Score: ${call.goat_score}`));
+            });
+          }
+          await waitForEnter(rl);
+          resolve(true);
+          break;
+
+        case '5':
+          // Generate Training Injection
+          console.log(chalk.yellow('\n  Generating training injection prompt...'));
+
+          const injModeAnswer = await new Promise<string>((res) => {
+            rl.question(chalk.cyan('  Mode? [1] Acquisition [2] Disposition: '), res);
+          });
+          const injMode = injModeAnswer === '2' ? 'disposition' : 'acquisition';
+
+          const injection = await callAnalyzeAPI('injection', injMode);
+          if (injection && injection.injection) {
+            console.log(chalk.green('\n  Generated Training Injection:'));
+            console.log(chalk.cyan('  ─────────────────────────────────────────'));
+            console.log(chalk.white(injection.injection));
+            console.log(chalk.cyan('  ─────────────────────────────────────────'));
+            console.log(chalk.gray('\n  Copy this into your persona prompts to inject proven techniques.'));
+          } else {
+            console.log(chalk.gray('  No insights available yet. Analyze some calls first!'));
+          }
+          await waitForEnter(rl);
+          resolve(true);
+          break;
+
+        case 'b':
+          resolve(false);
+          break;
+
+        default:
+          console.log(chalk.red('  Invalid option'));
+          resolve(true);
+      }
+    });
+  });
+}
+
+/**
  * Main application loop
  */
 async function main(): Promise<void> {
@@ -545,6 +772,12 @@ async function main(): Promise<void> {
         let statusContinue = true;
         while (statusContinue) {
           statusContinue = await handleStatusMenu(rl);
+        }
+        break;
+      case '7':
+        let callAnalysisContinue = true;
+        while (callAnalysisContinue) {
+          callAnalysisContinue = await handleCallAnalysisMenu(rl);
         }
         break;
       case '0':
