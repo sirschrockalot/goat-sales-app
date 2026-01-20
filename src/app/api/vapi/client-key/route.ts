@@ -1,33 +1,46 @@
 /**
  * Get Vapi Client Key API
  * Returns the Vapi API key for client-side initialization
- * This prevents exposing the key in client-side code
- * 
- * Note: In production, consider using a more secure approach like
- * server-side assistant creation and passing only the assistant ID
+ *
+ * SECURITY: This API route returns the VAPI API key to authenticated users only.
+ * The key is stored server-side and never exposed in client bundle.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { createServerClient } from '@/lib/supabase';
 import logger from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
-    // For now, we'll use the public key if available
-    // In a more secure setup, you'd create assistants server-side
-    // and only pass the assistant ID to the client
-    const vapiPublicKey = process.env.NEXT_PUBLIC_VAPI_API_KEY;
+    // Verify user is authenticated
+    const supabase = createServerClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-    if (!vapiPublicKey) {
+    if (authError || !user) {
+      logger.warn('Unauthorized attempt to get VAPI key');
+      return NextResponse.json(
+        { error: 'Unauthorized - Please log in' },
+        { status: 401 }
+      );
+    }
+
+    // Get VAPI key from server-side environment variable (no NEXT_PUBLIC_ prefix)
+    const vapiApiKey = process.env.VAPI_API_KEY;
+
+    if (!vapiApiKey) {
+      logger.error('VAPI_API_KEY not configured in environment');
       return NextResponse.json(
         { error: 'Vapi API key not configured' },
         { status: 500 }
       );
     }
 
-    // Return the public key (this is safe as it's already public)
-    // The real security is in using server-side assistant creation
+    // Log access for security audit
+    logger.info('VAPI key accessed', { userId: user.id });
+
+    // Return the key to authenticated user
     return NextResponse.json({
-      apiKey: vapiPublicKey,
+      apiKey: vapiApiKey,
     });
   } catch (error) {
     logger.error('Error getting Vapi client key', { error });

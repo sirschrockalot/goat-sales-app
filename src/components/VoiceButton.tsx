@@ -32,11 +32,27 @@ export default function VoiceButton({
 
   useEffect(() => {
     const client = getVapiClient();
-    
+
     // Initialize client
     const initClient = async () => {
       try {
-        const apiKey = process.env.NEXT_PUBLIC_VAPI_API_KEY;
+        // Fetch API key from server-side endpoint (not exposed in client bundle)
+        const response = await fetch('/api/vapi/client-key', {
+          method: 'GET',
+          credentials: 'include', // Include session cookies
+        });
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            setError('Please log in to make calls');
+          } else {
+            setError('Failed to get API key');
+          }
+          return;
+        }
+
+        const { apiKey } = await response.json();
+
         if (!apiKey) {
           setError('Vapi API key not configured');
           return;

@@ -120,9 +120,24 @@ export default function LiveCallPage() {
 
     const initAndStart = async () => {
       try {
-        const apiKey = process.env.NEXT_PUBLIC_VAPI_API_KEY;
+        // Fetch API key from server-side endpoint (not exposed in client bundle)
+        const keyResponse = await fetch('/api/vapi/client-key', {
+          method: 'GET',
+          credentials: 'include', // Include session cookies
+        });
+
+        if (!keyResponse.ok) {
+          if (keyResponse.status === 401) {
+            alert('Please log in to make calls');
+            router.push('/');
+            return;
+          }
+          throw new Error('Failed to get VAPI API key');
+        }
+
+        const { apiKey } = await keyResponse.json();
         const assistantId = searchParams.get('assistantId');
-        
+
         if (apiKey) {
           // Mark as initialized immediately to prevent duplicate calls
           hasInitialized.current = true;

@@ -9,6 +9,7 @@ import { gradeDispoCall } from '@/lib/dispoGrading';
 import { analyzeDeviation } from '@/lib/analyzeDeviation';
 import { analyzeSentiment } from '@/lib/analyzeSentiment';
 import { analyzeVoicePerformance } from '@/lib/voicePerformance';
+import { encryptTranscript } from '@/lib/encryption';
 
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
 import { getUserFromRequest } from '@/lib/getUserFromRequest';
@@ -181,12 +182,25 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Database not available' }, { status: 500 });
       }
 
+      // Encrypt transcript before storing
+      let encryptedTranscript = null;
+      try {
+        if (transcript && transcript.trim()) {
+          encryptedTranscript = await encryptTranscript(transcript);
+        }
+      } catch (encryptError) {
+        logger.error('Failed to encrypt Aircall transcript', { error: encryptError });
+        // Continue with unencrypted fallback for backwards compatibility
+        // In production, you may want to fail instead
+      }
+
       // Store in database
       const { data, error } = await (supabaseAdmin as any)
         .from('calls')
         .insert({
           user_id: userId,
-          transcript: transcript,
+          transcript_encrypted: encryptedTranscript,
+          transcript: encryptedTranscript ? null : transcript, // Fallback to plain if encryption failed
           goat_score: gradingResultData.goatScore,
           recording_url: recordingUrl || null,
           persona_mode: 'acquisition', // Default for real calls
@@ -469,12 +483,25 @@ export async function POST(request: NextRequest) {
           }
         }
 
+        // Encrypt transcript before storing
+        let encryptedTranscript = null;
+        try {
+          if (transcript && transcript.trim()) {
+            encryptedTranscript = await encryptTranscript(transcript);
+          }
+        } catch (encryptError) {
+          logger.error('Failed to encrypt transcript', { error: encryptError, callId: callData.id });
+          // Continue with unencrypted fallback for backwards compatibility
+          // In production, you may want to fail instead
+        }
+
         // Store in database
         const { data, error } = await (supabaseAdmin as any)
           .from('calls')
           .insert({
             user_id: userId,
-            transcript: transcript,
+            transcript_encrypted: encryptedTranscript,
+            transcript: encryptedTranscript ? null : transcript, // Fallback to plain if encryption failed
             goat_score: gradingResultData.goatScore,
             recording_url: callData.recordingUrl || null,
             persona_mode: personaMode,

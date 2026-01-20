@@ -98,7 +98,7 @@ export function getEnvironmentConfig(): EnvironmentConfig {
         sellerModel: 'gpt-4o-mini', // Mini for cost optimization
       },
       vapi: {
-        apiKey: process.env.NEXT_PUBLIC_VAPI_API_KEY || '',
+        apiKey: process.env.VAPI_API_KEY || '',
         secretKey: process.env.VAPI_SECRET_KEY || '',
         model: 'eleven_turbo_v2_5', // ElevenLabs Turbo v2.5
         sttProvider: 'deepgram',
@@ -136,7 +136,7 @@ export function getEnvironmentConfig(): EnvironmentConfig {
         sellerModel: 'gpt-4o-mini', // GPT-4o-mini for Sellers/Referees
       },
       vapi: {
-        apiKey: process.env.SANDBOX_VAPI_API_KEY || process.env.NEXT_PUBLIC_VAPI_API_KEY || '',
+        apiKey: process.env.SANDBOX_VAPI_API_KEY || process.env.VAPI_API_KEY || '',
         secretKey: process.env.SANDBOX_VAPI_SECRET_KEY || process.env.VAPI_SECRET_KEY || '',
         model: 'eleven_turbo_v2_5',
         sttProvider: 'deepgram',
@@ -173,7 +173,7 @@ export function getEnvironmentConfig(): EnvironmentConfig {
       sellerModel: 'gpt-4o-mini',
     },
     vapi: {
-      apiKey: process.env.NEXT_PUBLIC_VAPI_API_KEY || '',
+      apiKey: process.env.VAPI_API_KEY || '',
       secretKey: process.env.VAPI_SECRET_KEY || '',
       model: 'eleven_turbo_v2_5',
       sttProvider: 'deepgram',

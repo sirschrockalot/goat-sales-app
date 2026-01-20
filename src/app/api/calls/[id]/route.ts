@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { judgeCall } from '@/lib/judge';
 import { analyzeDeviation } from '@/lib/analyzeDeviation';
+import { decryptTranscript } from '@/lib/encryption';
 import logger from '@/lib/logger';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
 
@@ -59,8 +60,23 @@ export async function GET(
       );
     }
 
-    // Generate signed URL for recording if it exists
+    // Decrypt transcript if encrypted
     const callData: any = data as any;
+    if (callData.transcript_encrypted) {
+      try {
+        callData.transcript = await decryptTranscript(callData.transcript_encrypted);
+        // Remove encrypted version from response for security
+        delete callData.transcript_encrypted;
+      } catch (decryptError) {
+        logger.error('Failed to decrypt transcript', { error: decryptError, callId });
+        // If decryption fails, check if plain transcript exists as fallback
+        if (!callData.transcript) {
+          logger.warn('No plaintext transcript available and decryption failed', { callId });
+        }
+      }
+    }
+
+    // Generate signed URL for recording if it exists
     if (callData.recording_url) {
       try {
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;

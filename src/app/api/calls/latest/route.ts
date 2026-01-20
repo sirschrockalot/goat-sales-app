@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getUserFromRequest } from '@/lib/getUserFromRequest';
+import { decryptTranscript } from '@/lib/encryption';
 import logger from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
@@ -44,7 +45,20 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    return NextResponse.json(data);
+    // Decrypt transcript if encrypted
+    const callData: any = data as any;
+    if (callData.transcript_encrypted) {
+      try {
+        callData.transcript = await decryptTranscript(callData.transcript_encrypted);
+        // Remove encrypted version from response for security
+        delete callData.transcript_encrypted;
+      } catch (decryptError) {
+        logger.error('Failed to decrypt transcript', { error: decryptError, userId });
+        // Fallback to plaintext if available
+      }
+    }
+
+    return NextResponse.json(callData);
   } catch (error) {
     logger.error('Error in GET /api/calls/latest', { error });
     return NextResponse.json(
